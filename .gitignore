@@ -1,0 +1,34 @@
+# Node/Deno dependencies
+node_modules/
+deno.lock
+
+# Logs
+*.log
+
+# Compiled output
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*.bak
+
+# System files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# Environment files
+.env
+.env.local
+
+# Temporary test data and binaries
+result.txt
+aq
+aq.*

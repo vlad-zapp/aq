@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "deno.unstable", "dom"]
+  },
+  "tasks": {
+    "start": "deno run --allow-all src/main.ts",
+    "build" : "deno compile --allow-all --output ./aq src/main.ts"
+  },
+  "fmt": {
+    "options": {
+      "useTabs": false,
+      "lineWidth": 80,
+      "indentWidth": 2,
+      "singleQuote": false,
+      "proseWrap": "preserve"
+    }
+  }
+}

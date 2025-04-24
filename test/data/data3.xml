@@ -1,0 +1,50 @@
+<company>
+  <name>TechCorp</name>
+  <founded year="1998">Silicon Valley</founded>
+  <employees>
+    <employee id="1">
+      <name>John Doe</name>
+      <position>Software Engineer</position>
+      <skills>
+        <skill>JavaScript</skill>
+        <skill>TypeScript</skill>
+        <skill>Python</skill>
+      </skills>
+    </employee>
+    <employee id="2">
+      <name>Jane Smith</name>
+      <position>Product Manager</position>
+      <skills>
+        <skill>Leadership</skill>
+        <skill>Communication</skill>
+      </skills>
+    </employee>
+  </employees>
+  <departments>
+    <department>
+      <name>Engineering</name>
+      <head>John Doe</head>
+    </department>
+    <department>
+      <name>Marketing</name>
+      <head>Jane Smith</head>
+    </department>
+  </departments>
+  <projects>
+    <project>
+      <title>AI Research</title>
+      <status>Ongoing</status>
+      <team>
+        <member>John Doe</member>
+        <member>Jane Smith</member>
+      </team>
+    </project>
+    <project>
+      <title>Website Redesign</title>
+      <status>Completed</status>
+      <team>
+        <member>Jane Smith</member>
+      </team>
+    </project>
+  </projects>
+</company>
