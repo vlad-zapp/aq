@@ -1,3 +1,5 @@
+import { aqFindByLocator } from "./replExtensions.ts";
+
 export class MiniRepl {
   readonly #decoder = new TextDecoder();
   readonly #encoder = new TextEncoder();
@@ -11,6 +13,7 @@ export class MiniRepl {
 
   async start(data: unknown): Promise<unknown> {
     (globalThis as any).data = data;
+    (globalThis as any).aqFindByLocator = aqFindByLocator;
     await Deno.stdin.setRaw(true);
 
     this.#writeLn("💡 Type JavaScript expressions to interact with the data.");
@@ -58,9 +61,9 @@ export class MiniRepl {
       }
 
       try {
+        this.#writeLn();
         this.#result = eval(joined);
         if (this.#result !== undefined) {
-          this.#writeLn();
           this.#writeLn(Deno.inspect(this.#result, { colors: true }));
           this.#writeLn();
         }
