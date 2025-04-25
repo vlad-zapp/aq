@@ -11,14 +11,14 @@ export function getErrorMessage(error: unknown): string {
 }
 
 // Helper function to detect the appropriate plugin
-export function detectPlugin(plugins : AqPlugin[], filename: string | undefined, input: string | undefined): AqPlugin | undefined {
+export function detectPlugin(plugins : AqPlugin[], filename: string | undefined, input: string | undefined, parameters: Record<string, unknown>): AqPlugin | undefined {
   let foundPlugins = plugins.filter((plugin) => plugin.detect(filename, input));
   
   // If no plugin was found based on filename, check if any plugin can decode the input
   if(foundPlugins.length == 0 && input) {
     foundPlugins = plugins.filter((plugin) => {
       try {
-        plugin.decode(input); 
+        plugin.decode(input, parameters); 
         return true;
       } catch {
         return false;

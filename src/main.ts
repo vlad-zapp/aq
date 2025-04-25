@@ -5,6 +5,7 @@ import { YamlPlugin } from "./plugins/yamlPlugin.ts";
 import { XmlPlugin } from "./plugins/xmlPlugin.ts";
 import { TomlPlugin } from "./plugins/tomlPlugin.ts";
 import { IniPlugin } from "./plugins/iniPlugin.ts";
+import { TextPlugin, PlainTextPlugin } from "./plugins/textPlugin.ts";
 import { MiniRepl } from "./repl.ts";
 import { detectPlugin, getErrorMessage } from "./utils.ts";
 
@@ -15,6 +16,8 @@ const plugins: AqPlugin[] = [
   XmlPlugin,
   TomlPlugin,
   IniPlugin,
+  TextPlugin,
+  PlainTextPlugin
 ];
 
 function queryNodes(data: any, query: string): any {
@@ -46,7 +49,7 @@ const cliCommand = new Command()
   )
   .option(
     "-o, --output-format <format:string>",
-    "Output format (e.g., JSON, YAML, raw). Defaults to the input format.",
+    "Output format (e.g., JSON, YAML, TEXT). Defaults to the input format.",
   )
   .option(
     "-x, --interactive",
@@ -61,6 +64,9 @@ const cliCommand = new Command()
       { query, interactive, interactiveWithOutput, outputFormat, inputFormat },
       file: string | undefined,
     ) => {
+
+      const context = { query, interactive, interactiveWithOutput, outputFormat, inputFormat }
+
       if (!file && Deno.stdin.isTerminal()) {
         await cliCommand.showHelp();
         Deno.exit(1);
@@ -89,7 +95,7 @@ const cliCommand = new Command()
           }
         } else {
           // Auto-detect the plugin if input type is not specified
-          inputPlugin = detectPlugin(plugins, file, input);
+          inputPlugin = detectPlugin(plugins, file, input, context);
           if (!inputPlugin) {
             console.error("❌ Could not detect input format.");
             Deno.exit(1);

@@ -6,7 +6,7 @@
 
 ## ✨ Features
 
-- 📦 Supports multiple data formats: JSON, YAML, XML, TOML, INI  
+- 📦 Supports multiple data formats: JSON, YAML, XML, TOML, INI, and text
 - 🔍 Query using JavaScript expressions (e.g., `data.users[0].name`)  
 - 🧑‍💻 Interactive console (REPL) for real-time data exploration  
 - 🛠️ Seamless integration with Unix pipelines  
