@@ -43,7 +43,7 @@ This compiles `aq` into a standalone executable for your platform.
 
 ### Option 4: Download Precompiled Binaries for your platform
 
-Comming soon.
+Check the [Releases](https://github.com/vlad-zapp/aq/releases) page.
 
 ---
 
