@@ -1,4 +1,4 @@
-import { aqFindByLocator } from "./replExtensions.ts";
+import "./replExtensions.ts";
 
 export class MiniRepl {
   readonly #decoder = new TextDecoder();
@@ -13,7 +13,6 @@ export class MiniRepl {
 
   async start(data: unknown): Promise<unknown> {
     (globalThis as any).data = data;
-    (globalThis as any).aqFindByLocator = aqFindByLocator;
     await Deno.stdin.setRaw(true);
 
     this.#writeLn("💡 Type JavaScript expressions to interact with the data.");
@@ -39,7 +38,7 @@ export class MiniRepl {
       return;
     }
 
-    if (input === "\r") { // Enter key
+    if (input === "\r") { // Enter
       const current = this.#buffer;
       const joined = [...this.#multilineBuffer, current].join("\n").trim();
 
@@ -52,29 +51,33 @@ export class MiniRepl {
       }
 
       if (joined) {
-        this.#history.push(joined);
-        this.#historyIndex = this.#history.length;
-      } else {
-        this.#writeLn();
-        this.#writePrompt();
-        return;
-      }
-
-      try {
-        this.#writeLn();
-        this.#result = eval(joined);
-        if (this.#result !== undefined) {
-          this.#writeLn(Deno.inspect(this.#result, { colors: true }));
-          this.#writeLn();
+        if (!joined.trimEnd().endsWith(";")) {
+          this.#history.push(joined);
+          this.#historyIndex = this.#history.length;
         }
-      } catch (e) {
-        this.#writeLn(`⚠️ ${e}`);
-      }
 
-      this.#multilineBuffer = [];
-      this.#buffer = "";
-      this.#cursorIndex = 0;
-      this.#writePrompt();
+        try {
+          this.#writeLn();
+          this.#result = eval(joined);
+          if (this.#result !== undefined) {
+            this.#writeLn(Deno.inspect(this.#result, { colors: true }));
+            this.#writeLn();
+          }
+        } catch (e) {
+          this.#writeLn(`⚠️ ${e}`);
+        }
+
+        if (joined.trimEnd().endsWith(";")) {
+          // Keep the command in the prompt
+          this.#rewriteLine();
+        } else {
+          // Clear the buffer and reset the prompt
+          this.#multilineBuffer = [];
+          this.#buffer = "";
+          this.#cursorIndex = 0;
+          this.#writePrompt();
+        }
+      }
     } else if (input === "\u007f") { // Backspace
       if (this.#cursorIndex > 0) {
         const arr = [...this.#buffer];
@@ -164,7 +167,7 @@ export class MiniRepl {
 
   #handleAutocomplete(): void {
     const beforeCursor = [...this.#buffer].slice(0, this.#cursorIndex).join("");
-    const match = /([\w$.]+)$/.exec(beforeCursor);
+    const match = /([\[\]\d\w$.]+)$/.exec(beforeCursor);
     if (!match) return;
 
     const expr = match[1];
@@ -179,30 +182,71 @@ export class MiniRepl {
       target = globalThis;
     }
 
-    const completions = this.#getAllKeys(target ?? {}).filter((k) =>
-      k.startsWith(prefix)
-    );
+    const completions = getCompletionKeys(target ?? {}, prefix);
 
-    if (completions.length === 1) {
-      const delta = completions[0].slice(prefix.length);
-      const arr = [...this.#buffer];
-      arr.splice(this.#cursorIndex, 0, ...delta);
-      this.#buffer = arr.join("");
-      this.#cursorIndex += delta.length;
+    if (completions.keys.length === 1) {
+      const delta = completions.keys[0].slice(prefix.length);
+      this.#appendToCursor(delta);
+    } else if (completions.keys.length > 1) {
+      // Find the longest common prefix of all completions
+      const commonPrefix = this.#getLongestCommonPrefix(completions.keys);
+      if (commonPrefix.length > prefix.length) {
+        // Add the common part to the buffer
+        const delta = commonPrefix.slice(prefix.length);
+        this.#appendToCursor(delta);
+      }
+
+      // Display all completions
+      this.#writeLn(
+        `\n${
+          completions.keys.slice(0, completions.numPrimary).join(" ")
+        } \x1b[90m${
+          completions.keys.slice(
+            completions.numPrimary,
+            completions.keys.length,
+          ).join(" ")
+        }\x1b[0m`,
+      );
       this.#rewriteLine();
-    } else if (completions.length > 1) {
-      this.#writeLn("\n" + completions.join(" "));
-      this.#rewriteLine();
+    }
+
+    function getCompletionKeys(
+      obj: unknown,
+      prefix: string,
+    ): { keys: string[]; numPrimary: number } {
+      const keys: Set<string> = new Set();
+      let numPrimary = 0;
+      if (obj === globalThis) {
+        [
+          "data",
+          "aqFindByLocator",
+          "aqFindByName",
+          "aqFindByFullName",
+          "aqFindByValue",
+        ].filter((x) => x.startsWith(prefix)).forEach((k) => keys.add(k));
+      }
+
+      while (obj) {
+        Object.getOwnPropertyNames(obj).filter((k) => k.startsWith(prefix) && !/^\d/.test(k))
+          .forEach((k) => keys.add(k));
+        numPrimary = numPrimary !== 0 ? numPrimary : keys.size;
+        obj = Object.getPrototypeOf(obj);
+      }
+
+      return { keys: [...keys], numPrimary: numPrimary };
     }
   }
 
-  #getAllKeys(obj: unknown): string[] {
-    const keys = new Set<string>();
-    while (obj && typeof obj === "object") {
-      Object.getOwnPropertyNames(obj).forEach((k) => keys.add(k));
-      obj = Object.getPrototypeOf(obj);
+  #getLongestCommonPrefix(strings: string[]): string {
+    if (strings.length === 0) return "";
+    let prefix = strings[0];
+    for (const str of strings) {
+      while (str.indexOf(prefix) !== 0) {
+        prefix = prefix.slice(0, -1);
+        if (prefix === "") return "";
+      }
     }
-    return [...keys];
+    return prefix;
   }
 
   #writePrompt(prefix: string = "> "): void {
@@ -223,5 +267,13 @@ export class MiniRepl {
 
   #writeLn(str: string = ""): void {
     Deno.stderr.writeSync(this.#encoder.encode(str + "\n"));
+  }
+
+  #appendToCursor(str: string = ""): void {
+    const arr = [...this.#buffer];
+    arr.splice(this.#cursorIndex, 0, ...str);
+    this.#buffer = arr.join("");
+    this.#cursorIndex += str.length;
+    this.#rewriteLine();
   }
 }

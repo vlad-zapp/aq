@@ -49,42 +49,51 @@ export function aqFindByLocator(
     return results;
 }
 
+export function aqFindByName(this: object, locator: string) {
+    const locatorRx = new RegExp(locator);
+    return aqFindByLocator((parent, name, obj) => locatorRx.test(name), this);
+}
+
+export function aqFindByFullName(this: object, locator: string) {
+    const locatorRx = new RegExp(locator);
+    return aqFindByLocator((parent, name, obj) => locatorRx.test(`${parent}.${name}`), this);
+}
+
+export function aqFindByValue(this: object, locator: string) {
+    const locatorRx = new RegExp(locator);
+    return aqFindByLocator((parent, name, obj) => {
+        if (typeof obj === "string") {
+            return locatorRx.test(obj);
+        }
+        return false;
+    }, this);
+}
+
 Object.defineProperty(Object.prototype, "aqFindByLocator", {
-    value: function (this: object, locator: (parent : string, name : string, value: unknown) => boolean) {
-        return aqFindByLocator(locator, this);
-    },
+    value: aqFindByLocator,
     writable: true,
     configurable: true,
 });
 
-Object.defineProperty(Object.prototype, "aqFindName", {
-    value: function (this: object, locator: string) {
-        const locatorRx = new RegExp(locator);
-        return aqFindByLocator((parent, name, obj) => locatorRx.test(name), this);
-    },
+Object.defineProperty(Object.prototype, "aqFindByName", {
+    value: aqFindByName,
     writable: true,
     configurable: true,
 });
 
-Object.defineProperty(Object.prototype, "aqFindFullName", {
-    value: function (this: object, locator: string) {
-        const locatorRx = new RegExp(locator);
-        return aqFindByLocator((parent, name, obj) => locatorRx.test(`${parent}.${name}`), this);
-    },
+Object.defineProperty(Object.prototype, "aqFindByFullName", {
+    value: aqFindByFullName,
     writable: true,
     configurable: true,
 });
 
-Object.defineProperty(Object.prototype, "aqFindValue", {
-    value: function (this: object, locator: string) {
-        const locatorRx = new RegExp(locator);
-        return aqFindByLocator((parent, name, obj) => {
-            if (typeof obj === "string") {
-                return locatorRx.test(obj);
-            } 
-            return false;
-        }, this);
-    },
+Object.defineProperty(Object.prototype, "aqFindByValue", {
+    value: aqFindByValue,
     writable: true,
     configurable: true,
 });
+
+(globalThis as any).aqFindByLocator = aqFindByLocator;
+(globalThis as any).aqFindByName = aqFindByName;
+(globalThis as any).aqFindByFullName = aqFindByFullName;
+(globalThis as any).aqFindByValue = aqFindByValue;
