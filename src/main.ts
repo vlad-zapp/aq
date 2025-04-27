@@ -8,6 +8,7 @@ import { IniPlugin } from "./plugins/iniPlugin.ts";
 import { TextPlugin, PlainTextPlugin } from "./plugins/textPlugin.ts";
 import { MiniRepl } from "./repl.ts";
 import { detectPlugin, getErrorMessage } from "./utils.ts";
+import { version } from "../version.ts";
 
 // Register plugins
 const plugins: AqPlugin[] = [
@@ -34,7 +35,7 @@ function queryNodes(data: any, query: string): any {
 // CLI definition
 const cliCommand = new Command()
   .name("aq")
-  .version("0.1.0")
+  .version(version)
   .description("Aq: A universal query tool for structured data (like jq + yq).\n\n"
     +`Supported formats: ${plugins.map((plugin) => plugin.name).join(", ")}.\n`
     + "Input data pipng is available (but not supported w/interactive mode on Windows).\n")

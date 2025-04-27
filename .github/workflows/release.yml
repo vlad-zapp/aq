@@ -22,6 +22,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Generate version.ts
+        run: echo 'export const version = "${{ github.ref_name }}";' > ./version.ts
+
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
