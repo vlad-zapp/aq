@@ -15,7 +15,7 @@ export interface AqPlugin {
    * @param context - Additional metadata or configuration for decoding.
    * @returns A list of AqNodes representing the parsed data.
    */
-  decode: (input: any, context?: Record<string, unknown>) => any[];
+  decode: (input: string, context?: Record<string, unknown>) => unknown;
 
   /**
    * Encodes a list of AqNodes into a specific format.
@@ -23,5 +23,5 @@ export interface AqPlugin {
    * @param context - Additional metadata or configuration for encoding.
    * @returns The encoded data (e.g., string, buffer, or stream).
    */
-  encode: (nodes: any[], context?: Record<string, unknown>) => unknown;
+  encode: (nodes: unknown[], context?: Record<string, unknown>) => unknown;
 }

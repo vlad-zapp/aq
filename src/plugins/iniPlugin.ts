@@ -4,15 +4,11 @@ import { parse as parseIni, stringify as stringifyIni } from "https://deno.land/
 export const IniPlugin: AqPlugin = {
   name: "INI",
 
-  detect: (filename: string | undefined, content : string | undefined): boolean => {
+  detect: (filename: string | undefined): boolean => {
     return filename?.toLowerCase().endsWith(".ini") || filename?.toLowerCase().endsWith(".cfg") === true;
   },
 
-  decode: (input: string): any => {
-    if (!input) {
-        return false;
-      }
-  
+  decode: (input: string): unknown => {
       // ini parser is absolutely forgiving
       // so we need to check if the input is compliant with ini format
   
@@ -34,7 +30,7 @@ export const IniPlugin: AqPlugin = {
       }
   },
 
-  encode: (data: any): string => {
+  encode: (data: unknown): string => {
     return stringifyIni(data); // Convert JSON-like structure back to INI
   }
 };

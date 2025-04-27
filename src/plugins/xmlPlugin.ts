@@ -4,7 +4,7 @@ import { parse as parseXml, stringify as stringifyXml } from "https://deno.land/
 export const XmlPlugin: AqPlugin = {
   name: "XML",
   
-  detect: (filename : string | undefined, input: string | undefined): boolean => {
+  detect: (filename : string | undefined): boolean => {
     return filename?.toLowerCase().endsWith(".xml") || filename?.toLowerCase().endsWith(".xhtml") ||
            filename?.toLowerCase().endsWith(".rss") || filename?.toLowerCase().endsWith(".atom") ||
            filename?.toLowerCase().endsWith(".svg") || filename?.toLowerCase().endsWith(".xul") ||
@@ -16,11 +16,16 @@ export const XmlPlugin: AqPlugin = {
            filename?.toLowerCase().endsWith(".xsl") || filename?.toLowerCase().endsWith(".xmi") === true;
   },
   
-  decode: (input: string): any => {
+  decode: (input: string): unknown => {
     return parseXml(input); // Convert XML to a JSON-like structure
   },
 
-  encode: (data: any): string => {
-    return stringifyXml(data)
-  },
+  encode: (data: unknown): string => {
+    if (typeof data !== "object" ) {
+      throw new Error("query result must be an object to convert to XML because xml document should have a single root tag.");
+    }
+    if (data === null) {
+      return "";
+    }
+    return stringifyXml(data as Record<string, unknown>);  },
 };

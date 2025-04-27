@@ -3,11 +3,11 @@ import { AqPlugin } from "../infrastructure/aqPlugin.ts";
 export const TextPlugin: AqPlugin = {
   name: "TEXT",
 
-  detect: (filename : string | undefined, content : string | undefined): boolean => {
+  detect: (filename : string | undefined): boolean => {
     return filename?.toLowerCase().endsWith(".txt") || filename?.toLowerCase().endsWith(".log") === true;
   },
 
-  decode: (input: string, context: Record<string, unknown> | undefined): any => {
+  decode: (input: string, context: Record<string, unknown> | undefined): unknown => {
     if(context?.inputFormat === "TEXT") {
       return input.split(/\r?\n/) // Split by new lines
     } else {
@@ -15,7 +15,7 @@ export const TextPlugin: AqPlugin = {
     }
   },
 
-  encode: (data: any, context: Record<string, unknown> | undefined): string => {
+  encode: (data: object): string => {
     return Array.isArray(data) 
       ? data.join("\n")
       : String(data);
@@ -25,11 +25,11 @@ export const TextPlugin: AqPlugin = {
 export const PlainTextPlugin: AqPlugin = {
   name: "PLAINTEXT",
 
-  detect: (filename : string | undefined, content : string | undefined): boolean => {
+  detect: (filename : string | undefined): boolean => {
     return filename?.toLowerCase().endsWith(".txt") || filename?.toLowerCase().endsWith(".log") === true;
   },
 
-  decode: (input: string, context: Record<string, unknown> | undefined): any => {
+  decode: (input: string, context: Record<string, unknown> | undefined): unknown => {
     if(context?.inputFormat === "PLAINTEXT") {
       return input;
     } else {
@@ -37,7 +37,7 @@ export const PlainTextPlugin: AqPlugin = {
     }
   },
 
-  encode: (data: any): string => {
+  encode: (data: object): string => {
     return Array.isArray(data) 
       ? data.join("\n")
       : String(data);
