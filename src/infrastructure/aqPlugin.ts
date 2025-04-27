@@ -19,9 +19,9 @@ export interface AqPlugin {
 
   /**
    * Encodes a list of AqNodes into a specific format.
-   * @param nodes - The list of AqNodes to encode.
+   * @param obj - The data to encode (e.g., object, array).
    * @param context - Additional metadata or configuration for encoding.
    * @returns The encoded data (e.g., string, buffer, or stream).
    */
-  encode: (nodes: unknown[], context?: Record<string, unknown>) => unknown;
+  encode: (obj: unknown, context?: Record<string, unknown>) => unknown;
 }

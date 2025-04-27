@@ -15,7 +15,7 @@ export const TextPlugin: AqPlugin = {
     }
   },
 
-  encode: (data: object): string => {
+  encode: (data: unknown): string => {
     return Array.isArray(data) 
       ? data.join("\n")
       : String(data);
@@ -37,7 +37,7 @@ export const PlainTextPlugin: AqPlugin = {
     }
   },
 
-  encode: (data: object): string => {
+  encode: (data: unknown): string => {
     return Array.isArray(data) 
       ? data.join("\n")
       : String(data);

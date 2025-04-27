@@ -21,7 +21,7 @@ const plugins: AqPlugin[] = [
   PlainTextPlugin
 ];
 
-function queryNodes(data: any, query: string): any {
+function queryNodes(data: unknown, query: string): unknown {
   try {
     // Use `Function` to evaluate the query in the context of `data`
     const func = new Function("data", `return ${query}`);
