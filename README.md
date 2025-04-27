@@ -22,13 +22,13 @@
 Ensure you have [Deno](https://deno.land/#installation) installed.
 
 ```bash
-deno run --allow-all --unstable https://raw.githubusercontent.com/vlad-zapp/aq/main/aq.ts
+deno run --allow-all https://raw.githubusercontent.com/vlad-zapp/aq/refs/heads/main/src/main.ts
 ```
 
 ### Option 2: Install as a CLI Tool
 
 ```bash
-deno install -f --allow-all --unstable -n aq https://raw.githubusercontent.com/vlad-zapp/aq/main/aq.ts
+deno install -fg -n aq --allow-all https://raw.githubusercontent.com/vlad-zapp/aq/refs/heads/main/src/main.ts
 ```
 
 This installs `aq` globally. Ensure your Deno bin directory is in your `PATH`.
@@ -134,23 +134,7 @@ Inside the REPL:
 data.users.filter(u => u.isActive).map(u => u.email)
 ```
 
-⬅️ Thу result of the last command will be printed to stdout when you exit — perfect for passing into `xargs`, `pbcopy`, etc.
-
----
-
-## 🧰 Development
-
-### Build
-
-```bash
-deno task build
-```
-
-### Test
-
-```bash
-deno test
-```
+⬅️ The result of the last command will be printed to stdout when you exit — perfect for passing into `xargs`, `pbcopy`, etc.
 
 ---
 
