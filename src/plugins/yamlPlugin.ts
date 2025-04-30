@@ -1,5 +1,5 @@
 import { AqPlugin } from "../infrastructure/aqPlugin.ts";
-import { parse as parseYaml, stringify as stringifyYaml } from "https://deno.land/std/yaml/mod.ts";
+import { parseAll as parseYaml, stringify as stringifyYaml } from "https://deno.land/std/yaml/mod.ts";
 
 export const YamlPlugin: AqPlugin = {
   name: "YAML",
@@ -20,7 +20,12 @@ export const YamlPlugin: AqPlugin = {
       throw new Error("I don't recognize YAML as a superset of JSON. Please use JSON parser instead.");
     }
 
-    return parseYaml(input);
+    const parsedDocument = parseYaml(input);
+    if(Array.isArray(parsedDocument)) {
+      return parsedDocument.length === 1 ? parsedDocument[0] : parsedDocument;
+    } else {
+      throw Error("Yaml was not parsed as expected. Please check the input. Outut: " + JSON.stringify(parsedDocument));
+    }
   },
 
   encode: (data: unknown): string => {

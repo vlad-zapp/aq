@@ -23,3 +23,34 @@ projects:
     completed: false
   - title: Learn Python
     completed: true
+---
+name: Jane
+age: 25
+isEmployed: false
+address:
+  street: 456 Elm St
+  city: Springfield
+  zip: 67890
+children:
+  - name: Charlie
+    age: 5
+    hobbies:
+      - painting
+      - reading
+  - name: Dave
+    age: 3
+    hobbies:
+      - playing with blocks
+      - watching cartoons
+pets:
+  - type: dog
+    name: Max
+    age: 4
+  - type: cat
+    name: Whiskers
+    age: 2
+projects:
+  - title: Write a book
+    completed: false
+  - title: Start a blog
+    completed: true
