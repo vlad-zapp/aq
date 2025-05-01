@@ -10,6 +10,7 @@ import { MiniRepl } from "./repl.ts";
 import { detectPlugin, getErrorMessage } from "./utils.ts";
 import { version } from "../version.ts";
 import { ParsedData } from "./infrastructure/ParsedData.ts";
+import { startWebServer } from "./webui/webServer.ts";
 
 // Register plugins
 const plugins: AqPlugin[] = [
@@ -57,14 +58,18 @@ const cliCommand = new Command()
     "-X, --interactive-with-output",
     "Interactive mode + print last result to stdout.",
   )
+  .option(
+    "-w, --web",
+    "Start a web server to display data as a tree with filtering capabilities.",
+  )
   .action(
     async (
-      { query, interactive, interactiveWithOutput, outputFormat },
+      { query, interactive, interactiveWithOutput, outputFormat, web },
       files: string | undefined,
     ) => {
       const context = { query, interactive, interactiveWithOutput, outputFormat };
 
-      if (!files && Deno.stdin.isTerminal()) {
+      if (!files && Deno.stdin.isTerminal() && !web) {
         await cliCommand.showHelp();
         Deno.exit(1);
       }
@@ -165,6 +170,11 @@ const cliCommand = new Command()
         } else {
           // Apply the query (if provided)
           result = query ? queryNodes(data, query) : data;
+        }
+
+        if (web) {
+          await startWebServer(data);
+          return;
         }
 
         if (!interactive) {

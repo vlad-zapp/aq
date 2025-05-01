@@ -1,4 +1,5 @@
 import "./replExtensions.ts";
+import { evaluateCommand, autocomplete, getCompletionKeys } from "./replHelpers.ts";
 
 export class MiniRepl {
   readonly #decoder = new TextDecoder();
@@ -58,7 +59,7 @@ export class MiniRepl {
 
         try {
           this.#writeLn();
-          this.#result = eval(joined);
+          this.#result = evaluateCommand(joined, (globalThis as any).data);
           if (this.#result !== undefined) {
             this.#writeLn(Deno.inspect(this.#result, { colors: true }));
             this.#writeLn();

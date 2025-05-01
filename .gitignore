@@ -8,6 +8,7 @@ deno.lock
 # Compiled output
 dist/
 build/
+src/webui/embedded.ts
 
 # Temporary files
 *.tmp

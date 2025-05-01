@@ -1,6 +1,3 @@
-import { regexp } from "https://deno.land/std@0.224.0/yaml/_type/regexp.ts";
-
-// Implementation
 export function aqFindByLocator(
     locator: (parent: string, name: string, value: unknown) => boolean,
     root?: object

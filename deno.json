@@ -3,8 +3,9 @@
     "lib": ["deno.ns", "deno.unstable", "dom"]
   },
   "tasks": {
-    "start": "deno run --allow-all src/main.ts",
-    "build" : "deno compile --allow-all --output ./aq src/main.ts"
+    "embed-assets": "deno run --allow-all embed-assets.ts",
+    "start": "deno task embed-assets && deno run --allow-all src/main.ts",
+    "build" : "deno task embed-assets && deno compile --allow-all --output ./aq src/main.ts"
   },
   "fmt": {
     "options": {

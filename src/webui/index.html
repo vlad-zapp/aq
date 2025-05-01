@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Data Viewer</title>
+  <!-- Include JSONEditor CSS -->
+  <link rel="stylesheet" href="/assets/jsoneditor.min.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #000; /* Black background */
+      color: #ccc; /* Gray text */
+    }
+    #command {
+      width: 100%;
+      padding: 10px;
+      font-size: 18px;
+      background-color: #222; /* Dark gray input background */
+      color: #fff; /* White text */
+      border: none;
+      outline: none;
+    }
+    #editor {
+      height: calc(100vh - 50px); /* Full height minus input field */
+      background-color: #111; /* Darker background for the editor */
+    }
+    #hints {
+      position: absolute;
+      background: #222;
+      color: #fff;
+      padding: 5px;
+      border: 1px solid #444;
+      display: none;
+      z-index: 1000; /* Ensure it appears above other elements */
+      max-width: 100%; /* Prevent overflow */
+      overflow-y: auto; /* Add scrolling if needed */
+    }
+    /* Hide the Filter button */
+    .jsoneditor-transform {
+      display: none !important;
+    }
+    /* Hide the Sort button */
+    .jsoneditor-sort {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <input id="command" type="text" placeholder="Enter a command (e.g., data.filter(...))" />
+  <div id="hints" style="position: absolute; background: #222; color: #fff; padding: 5px; border: 1px solid #444; display: none;"></div>
+  <div id="editor"></div>
+
+  <!-- Include JSONEditor JS -->
+  <script src="/assets/jsoneditor.min.js"></script>
+  <script>
+    let data = {}; // Placeholder, will be replaced dynamically
+    const commandInput = document.getElementById('command');
+    const hintsContainer = document.getElementById('hints');
+    const editorContainer = document.getElementById('editor');
+
+    // Initialize JSONEditor
+    const editor = new JSONEditor(editorContainer, {
+      mode: 'tree',
+      mainMenuBar: true,
+      navigationBar: true,
+      theme: 'ace/theme/monokai',
+    });
+
+    // Render the initial data
+    editor.set(data);
+
+    // Autocomplete logic
+    let autocompleteIndex = -1;
+    let autocompleteSuggestions = [];
+
+    async function fetchAutocomplete(input) {
+      try {
+        const response = await fetch('/autocomplete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ input }),
+        });
+        const result = await response.json();
+        return result.completions || [];
+      } catch (error) {
+        console.error('Autocomplete error:', error);
+        return [];
+      }
+    }
+
+    function updateHints() {
+      if (autocompleteSuggestions.length === 0) {
+        hintsContainer.style.display = 'none';
+        return;
+      }
+
+      const input = commandInput.value;
+      const cursorPosition = commandInput.selectionStart; // Get the current cursor position
+
+      // Calculate the last expression based on the first suggestion length
+      const lastExpression = input.substring(
+        cursorPosition - autocompleteSuggestions[0].length,
+        cursorPosition
+      );
+
+      // Hide the suggestion box if there's only one suggestion and it fully matches the last part of the command
+      if (
+        autocompleteSuggestions.length === 1 &&
+        autocompleteSuggestions[0] === lastExpression
+      ) {
+        hintsContainer.style.display = 'none';
+        return;
+      }
+
+      // Position the hints container below the input field
+      const inputRect = commandInput.getBoundingClientRect();
+      hintsContainer.style.top = `${inputRect.bottom + window.scrollY}px`;
+      hintsContainer.style.left = `${inputRect.left + window.scrollX}px`;
+      hintsContainer.style.width = `${inputRect.width}px`;
+
+      // Populate the hints container
+      hintsContainer.innerHTML = autocompleteSuggestions
+        .map((suggestion, index) => {
+          const isSelected = index === autocompleteIndex;
+          return `<div 
+                    class="hint-item" 
+                    data-index="${index}" 
+                    style="padding: 2px; background: ${isSelected ? '#444' : 'transparent'}; cursor: pointer;">
+                    ${suggestion}
+                  </div>`;
+        })
+        .join('');
+      hintsContainer.style.display = 'block';
+
+      // Add click event listeners to suggestions
+      document.querySelectorAll('.hint-item').forEach((item) => {
+        item.addEventListener('click', (event) => {
+          autocompleteIndex = parseInt(event.target.getAttribute('data-index'), 10);
+          updateInputWithSuggestion();
+
+          // Close the suggestion box and return focus to the input field
+          hintsContainer.style.display = 'none';
+          commandInput.focus();
+        });
+      });
+    }
+
+    commandInput.addEventListener('input', async () => {
+      const input = commandInput.value;
+      autocompleteSuggestions = await fetchAutocomplete(input); // Pass the full command string
+      autocompleteIndex = -1;
+      updateHints();
+    });
+
+    commandInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Tab') {
+        event.preventDefault();
+
+        if (autocompleteSuggestions.length > 0) {
+          if (event.shiftKey) {
+            // Cycle backward through suggestions on Shift+Tab
+            autocompleteIndex =
+              (autocompleteIndex - 1 + autocompleteSuggestions.length) % autocompleteSuggestions.length;
+          } else {
+            // Cycle forward through suggestions on Tab
+            autocompleteIndex = (autocompleteIndex + 1) % autocompleteSuggestions.length;
+          }
+
+          // Update the input field with the current suggestion
+          updateInputWithSuggestion();
+
+          // Update the hints display
+          updateHints();
+        }
+      }
+    });
+
+    function updateInputWithSuggestion() {
+      const input = commandInput.value;
+      const cursorPosition = commandInput.selectionStart; // Get the cursor position
+
+      // Find the position of the last dot before the cursor
+      const lastDotIndex = input.lastIndexOf('.', cursorPosition - 1);
+
+      let prefix = '';
+      if (lastDotIndex !== -1) {
+        // Preserve everything before the last dot
+        prefix = input.slice(0, lastDotIndex + 1);
+      }
+
+      // Get the selected suggestion
+      const suggestion = autocompleteSuggestions[autocompleteIndex];
+
+      // Update the input field with the prefix + suggestion
+      commandInput.value = prefix + suggestion;
+
+      // Move the cursor to the end of the inserted suggestion
+      const newCursorPosition = (prefix + suggestion).length;
+      commandInput.setSelectionRange(newCursorPosition, newCursorPosition);
+
+      // Hide hints after applying a suggestion
+      hintsContainer.style.display = 'none';
+    }
+
+    // Handle command input
+    commandInput.addEventListener('keypress', async (event) => {
+      if (event.key === 'Enter') {
+        try {
+          const command = commandInput.value;
+          const response = await fetch('/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command }),
+          });
+          const result = await response.json();
+          if (response.ok) {
+            editor.set(result.result);
+            editor.expandAll(); // Expand all nodes in the JSON tree
+          } else {
+            alert(`❌ Error: ${result.error}`);
+          }
+        } catch (error) {
+          alert(`❌ Error: ${error.message}`);
+        }
+
+        // Hide the suggestion box after submitting the command
+        hintsContainer.style.display = 'none';
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Set the default text to 'data'
+      commandInput.value = 'data';
+
+      // Set focus to the command input box
+      commandInput.focus();
+    });
+  </script>
+</body>
+</html>
