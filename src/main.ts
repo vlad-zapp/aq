@@ -43,12 +43,12 @@ const cliCommand = new Command()
     + "Input data piping is available (but not supported w/interactive mode on Windows).\n")
   .arguments("[files:string]")
   .option(
-    "-q, --query <query:string>",
-    "JavaScript query to apply to the data.",
-  )
-  .option(
     "-o, --output-format <format:string>",
     "Output format (e.g., JSON, YAML, TEXT). Defaults to the input format.",
+  )
+  .option(
+    "-q, --query <query:string>",
+    "JavaScript query to apply to the data.",
   )
   .option(
     "-x, --interactive",
@@ -59,17 +59,33 @@ const cliCommand = new Command()
     "Interactive mode + print last result to stdout.",
   )
   .option(
-    "-w, --web",
+    "-w, --webui",
     "Start a web server to display data as a tree with filtering capabilities.",
   )
   .action(
     async (
-      { query, interactive, interactiveWithOutput, outputFormat, web },
+      { query, interactive, interactiveWithOutput, webui, outputFormat },
       files: string | undefined,
     ) => {
+      // Validate mutually exclusive options
+      const exclusiveOptions = [
+        { name: "-q/--query", value: query },
+        { name: "-x/--interactive", value: interactive },
+        { name: "-X/--interactive-with-output", value: interactiveWithOutput },
+        { name: "-w/--webui", value: webui },
+      ];
+
+      const activeOptions = exclusiveOptions.filter((opt) => opt.value);
+      if (activeOptions.length > 1) {
+        console.error(
+          `❌ The following options are mutually exclusive and cannot be used together: ${activeOptions.map((opt) => opt.name).join(", ")}`,
+        );
+        Deno.exit(1);
+      }
+
       const context = { query, interactive, interactiveWithOutput, outputFormat };
 
-      if (!files && Deno.stdin.isTerminal() && !web) {
+      if (!files && Deno.stdin.isTerminal()) {
         await cliCommand.showHelp();
         Deno.exit(1);
       }
@@ -90,9 +106,11 @@ const cliCommand = new Command()
 
           // Check for type prefix (e.g., "json:filename")
           const typeMatch = /^(\w+):(.+)$/.exec(fileEntry);
+          let explicitType = "";
           if (typeMatch) {
             const [, type, path] = typeMatch;
             filePath = path;
+            explicitType = type;
 
             // Find the plugin by name
             inputPlugin = plugins.find(
@@ -119,7 +137,7 @@ const cliCommand = new Command()
 
           try {
             // Parse the input into a JSON-like structure
-            const parsedData = inputPlugin.decode(input);
+            const parsedData = inputPlugin.decode(input, {...context, inputFormat: explicitType});
             data.push(parsedData);
           } catch (error) {
             console.error(
@@ -167,14 +185,12 @@ const cliCommand = new Command()
             console.log(new TextDecoder().decode(result.stdout).replace(/\r?\n$/, ""));
             Deno.exit(0);
           }
+        } else if (webui) {
+          await startWebServer(data);
+          return;
         } else {
           // Apply the query (if provided)
           result = query ? queryNodes(data, query) : data;
-        }
-
-        if (web) {
-          await startWebServer(data);
-          return;
         }
 
         if (!interactive) {

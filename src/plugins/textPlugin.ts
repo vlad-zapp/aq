@@ -9,10 +9,10 @@ export const TextPlugin: AqPlugin = {
   },
 
   decode: (input: string, context: Record<string, unknown> | undefined): ParsedData => {
-    if(context?.inputFormat === "TEXT") {
+    if((context?.inputFormat as string)?.toLowerCase() === "text") {
       return new ParsedData([input.split(/\r?\n/)]) // Split by new lines
     } else {
-      throw new Error("PlainTextPlugin only decfodes if inputFormat is set explicitly");
+      throw new Error("TextPlugin only decfodes if inputFormat is set explicitly");
     }
   },
 
@@ -31,7 +31,7 @@ export const PlainTextPlugin: AqPlugin = {
   },
 
   decode: (input: string, context: Record<string, unknown> | undefined): ParsedData => {
-    if(context?.inputFormat === "PLAINTEXT") {
+    if((context?.inputFormat as string)?.toLowerCase() === "plaintext") {
       return new ParsedData([input]);
     } else {
       throw new Error("PlainTextPlugin only decfodes if inputFormat is set explicitly");

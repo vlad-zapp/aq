@@ -63,10 +63,10 @@
 
     // Initialize JSONEditor
     const editor = new JSONEditor(editorContainer, {
-      mode: 'tree',
+      mode: 'view', // Restrict editing
       mainMenuBar: true,
       navigationBar: true,
-      theme: 'ace/theme/monokai',
+      theme: 'ace/theme/monokai', // Set dark theme
     });
 
     // Render the initial data
