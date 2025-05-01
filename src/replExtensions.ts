@@ -69,6 +69,46 @@ export function aqFindByValue(this: object, locator: string) {
     }, this);
 }
 
+export function aqDiff(...objects: object[]): object {
+    if (objects.length < 2) {
+        throw new Error("aqDiff requires at least two objects to compare.");
+    }
+
+    function diffHelper(keys: Set<string>, objs: object[]): any {
+        const result: any = {};
+
+        for (const key of keys) {
+            const values = objs.map((obj) => (obj as any)[key]);
+
+            // Check if all values are the same
+            const allEqual = values.every((val, _, arr) => JSON.stringify(val) === JSON.stringify(arr[0]));
+
+            if (!allEqual) {
+                if (values.some((val) => typeof val === "object" && val !== null)) {
+                    // If any value is an object, recurse
+                    const subKeys = new Set(
+                        values.flatMap((val) => (val && typeof val === "object" ? Object.keys(val) : []))
+                    );
+                    result[key] = diffHelper(subKeys, values.map((val) => (val && typeof val === "object" ? val : {})));
+                } else {
+                    // Otherwise, store the differing values
+                    result[key] = values.map((val, index) => ({ [`obj${index + 1}`]: val }));
+                }
+            }
+        }
+
+        return result;
+    }
+
+    // Collect all keys from all objects
+    const allKeys = new Set(objects.flatMap((obj) => Object.keys(obj)));
+
+    // Perform the diff
+    return diffHelper(allKeys, objects);
+}
+
+(globalThis as any).aqDiff = aqDiff;
+
 Object.defineProperty(Object.prototype, "aqFindByLocator", {
     value: aqFindByLocator,
     writable: true,

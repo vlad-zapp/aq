@@ -9,6 +9,7 @@ import { TextPlugin, PlainTextPlugin } from "./plugins/textPlugin.ts";
 import { MiniRepl } from "./repl.ts";
 import { detectPlugin, getErrorMessage } from "./utils.ts";
 import { version } from "../version.ts";
+import { ParsedData } from "./infrastructure/ParsedData.ts";
 
 // Register plugins
 const plugins: AqPlugin[] = [
@@ -37,16 +38,12 @@ const cliCommand = new Command()
   .name("aq")
   .version(version)
   .description("Aq: A universal query tool for structured data (like jq + yq).\n\n"
-    +`Supported formats: ${plugins.map((plugin) => plugin.name).join(", ")}.\n`
-    + "Input data pipng is available (but not supported w/interactive mode on Windows).\n")
-  .arguments("[file:string]")
+    + `Supported formats: ${plugins.map((plugin) => plugin.name).join(", ")}.\n`
+    + "Input data piping is available (but not supported w/interactive mode on Windows).\n")
+  .arguments("[files:string]")
   .option(
     "-q, --query <query:string>",
     "JavaScript query to apply to the data.",
-  )
-  .option(
-    "-i, --input-format <format:string>",
-    "Explicitly specify the input data type (e.g., JSON, YAML, XML, TOML, INI).",
   )
   .option(
     "-o, --output-format <format:string>",
@@ -62,60 +59,74 @@ const cliCommand = new Command()
   )
   .action(
     async (
-      { query, interactive, interactiveWithOutput, outputFormat, inputFormat },
-      file: string | undefined,
+      { query, interactive, interactiveWithOutput, outputFormat },
+      files: string | undefined,
     ) => {
+      const context = { query, interactive, interactiveWithOutput, outputFormat };
 
-      const context = { query, interactive, interactiveWithOutput, outputFormat, inputFormat }
-
-      if (!file && Deno.stdin.isTerminal()) {
+      if (!files && Deno.stdin.isTerminal()) {
         await cliCommand.showHelp();
         Deno.exit(1);
       }
 
+      const data: ParsedData[] = [];
       let result = null;
-      let data = null;
+
       try {
-        // Read input (from file or stdin)
-        const input = file
-          ? await Deno.readTextFile(file)
-          : await new Response(Deno.stdin.readable).text();
+        // Parse the files parameter
+        const fileList = files
+          ? files.split(",").map((file) => file.trim())
+          : [];
 
-        // Detect the input plugin
-        let inputPlugin: AqPlugin | undefined;
+        // Read and process each file
+        for (const fileEntry of fileList) {
+          let inputPlugin: AqPlugin | undefined;
+          let filePath = fileEntry;
 
-        if (inputFormat) {
-          // Find the plugin by name if input type is explicitly specified
-          inputPlugin = plugins.find(
-            (plugin) => plugin.name.toLowerCase() === inputFormat.toLowerCase(),
-          );
+          // Check for type prefix (e.g., "json:filename")
+          const typeMatch = /^(\w+):(.+)$/.exec(fileEntry);
+          if (typeMatch) {
+            const [, type, path] = typeMatch;
+            filePath = path;
 
+            // Find the plugin by name
+            inputPlugin = plugins.find(
+              (plugin) => plugin.name.toLowerCase() === type.toLowerCase(),
+            );
+
+            if (!inputPlugin) {
+              console.error(`❌ Unknown input type: ${type}`);
+              Deno.exit(1);
+            }
+          }
+
+          // Read the file content
+          const input = await Deno.readTextFile(filePath);
+
+          // Auto-detect the plugin if not explicitly specified
           if (!inputPlugin) {
-            console.error(`❌ Unknown input type: ${inputFormat}`);
+            inputPlugin = detectPlugin(plugins, filePath, input, context);
+            if (!inputPlugin) {
+              console.error(`❌ Could not detect input format for file: ${filePath}`);
+              Deno.exit(1);
+            }
+          }
+
+          try {
+            // Parse the input into a JSON-like structure
+            const parsedData = inputPlugin.decode(input);
+            data.push(parsedData);
+          } catch (error) {
+            console.error(
+              `❌ Error decoding input with plugin ${inputPlugin.name}: ${getErrorMessage(error)}`,
+            );
             Deno.exit(1);
           }
-        } else {
-          // Auto-detect the plugin if input type is not specified
-          inputPlugin = detectPlugin(plugins, file, input, context);
-          if (!inputPlugin) {
-            console.error("❌ Could not detect input format.");
-            Deno.exit(1);
-          }
-        }
-
-        try {
-          // Parse the input into a JSON-like structure
-          data = inputPlugin.decode(input);
-        } catch (error) {
-          console.error(
-            `❌ Error decoding input with plugin ${inputPlugin.name}: ${getErrorMessage(error)}`,
-          );
-          Deno.exit(1);
         }
 
         if (interactive || interactiveWithOutput) {
-          if (file) {
-            result = await (new MiniRepl().start(data));
+          if (files) {
+            result = await new MiniRepl().start(data);
           } else {
             if (Deno.build.os === "windows" && !Deno.stdin.isTerminal()) {
               console.error(
@@ -128,7 +139,7 @@ const cliCommand = new Command()
             // and run aq for it in a new shell with real tty.
             // This is a workaround for Deno limitations.
             const tempFile = await Deno.makeTempFile({ suffix: ".aq" });
-            await Deno.writeTextFile(tempFile, input);
+            await Deno.writeTextFile(tempFile, await new Response(Deno.stdin.readable).text());
 
             const quotedArgs = [tempFile, ...Deno.args].map((x) =>
               JSON.stringify(x)
@@ -162,16 +173,12 @@ const cliCommand = new Command()
             ? plugins.find((plugin) =>
               plugin.name.toLowerCase() === outputFormat.toLowerCase()
             )
-            : inputPlugin;
+            : plugins[0]; // Default to the first plugin
 
           if (!outputPlugin) {
-            if (outputFormat) {
-              console.error(
-                `❌ Could not find plugin for output format: ${outputFormat}`,
-              );
-            } else {
-              console.error("❌ Could not detect output format.");
-            }
+            console.error(
+              `❌ Could not find plugin for output format: ${outputFormat}`,
+            );
             Deno.exit(1);
           }
 

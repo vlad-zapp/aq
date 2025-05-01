@@ -1,4 +1,5 @@
 import { AqPlugin } from "../infrastructure/aqPlugin.ts";
+import { ParsedData } from "../infrastructure/ParsedData.ts";
 
 export const TextPlugin: AqPlugin = {
   name: "TEXT",
@@ -7,9 +8,9 @@ export const TextPlugin: AqPlugin = {
     return filename?.toLowerCase().endsWith(".txt") || filename?.toLowerCase().endsWith(".log") === true;
   },
 
-  decode: (input: string, context: Record<string, unknown> | undefined): unknown => {
+  decode: (input: string, context: Record<string, unknown> | undefined): ParsedData => {
     if(context?.inputFormat === "TEXT") {
-      return input.split(/\r?\n/) // Split by new lines
+      return new ParsedData([input.split(/\r?\n/)]) // Split by new lines
     } else {
       throw new Error("PlainTextPlugin only decfodes if inputFormat is set explicitly");
     }
@@ -29,9 +30,9 @@ export const PlainTextPlugin: AqPlugin = {
     return filename?.toLowerCase().endsWith(".txt") || filename?.toLowerCase().endsWith(".log") === true;
   },
 
-  decode: (input: string, context: Record<string, unknown> | undefined): unknown => {
+  decode: (input: string, context: Record<string, unknown> | undefined): ParsedData => {
     if(context?.inputFormat === "PLAINTEXT") {
-      return input;
+      return new ParsedData([input]);
     } else {
       throw new Error("PlainTextPlugin only decfodes if inputFormat is set explicitly");
     }

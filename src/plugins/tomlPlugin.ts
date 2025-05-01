@@ -1,5 +1,6 @@
 import { AqPlugin } from "../infrastructure/aqPlugin.ts";
 import { parse as parseToml, stringify as stringifyToml } from "https://deno.land/std/toml/mod.ts";
+import { ParsedData } from "../infrastructure/ParsedData.ts";
 
 export const TomlPlugin: AqPlugin = {
   name: "TOML",
@@ -8,8 +9,8 @@ export const TomlPlugin: AqPlugin = {
     return filename?.toLowerCase().endsWith(".toml") || filename?.toLowerCase().endsWith(".tml") === true;
   },
 
-  decode: (input: string): unknown => {
-    return parseToml(input); // Convert TOML to a JSON-like structure
+  decode: (input: string): ParsedData => {
+    return new ParsedData([parseToml(input)]); // Convert TOML to a JSON-like structure
   },
 
   encode: (data: unknown): string => {

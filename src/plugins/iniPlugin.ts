@@ -1,5 +1,6 @@
 import { AqPlugin } from "../infrastructure/aqPlugin.ts";
 import { parse as parseIni, stringify as stringifyIni } from "https://deno.land/x/ini/mod.ts";
+import { ParsedData } from "../infrastructure/ParsedData.ts";
 
 export const IniPlugin: AqPlugin = {
   name: "INI",
@@ -8,7 +9,7 @@ export const IniPlugin: AqPlugin = {
     return filename?.toLowerCase().endsWith(".ini") || filename?.toLowerCase().endsWith(".cfg") === true;
   },
 
-  decode: (input: string): unknown => {
+  decode: (input: string): ParsedData => {
       // ini parser is absolutely forgiving
       // so we need to check if the input is compliant with ini format
   
@@ -24,7 +25,7 @@ export const IniPlugin: AqPlugin = {
       const compliantLines = lines.filter((line) => iniLinePattern.test(line));
       const compliantPercentage = (compliantLines.length / lines.length) * 100;
       if(compliantPercentage >= 80) {
-        return parseIni(input);
+        return new ParsedData([parseIni(input)]);
       } else {
         throw new Error("The input is not compliant with INI format.");
       }

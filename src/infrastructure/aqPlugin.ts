@@ -1,3 +1,5 @@
+import { ParsedData } from "./ParsedData.ts";
+
 export interface AqPlugin {
   name: string; // Plugin name (e.g., "JSON", "YAML", "Database")
 
@@ -15,7 +17,7 @@ export interface AqPlugin {
    * @param context - Additional metadata or configuration for decoding.
    * @returns A list of AqNodes representing the parsed data.
    */
-  decode: (input: string, context?: Record<string, unknown>) => unknown;
+  decode: (input: string, context?: Record<string, unknown>) => ParsedData;
 
   /**
    * Encodes a list of AqNodes into a specific format.

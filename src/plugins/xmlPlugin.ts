@@ -1,5 +1,6 @@
 import { AqPlugin } from "../infrastructure/aqPlugin.ts";
 import { parse as parseXml, stringify as stringifyXml } from "https://deno.land/x/xml/mod.ts";
+import { ParsedData } from "../infrastructure/ParsedData.ts";
 
 export const XmlPlugin: AqPlugin = {
   name: "XML",
@@ -16,8 +17,8 @@ export const XmlPlugin: AqPlugin = {
            filename?.toLowerCase().endsWith(".xsl") || filename?.toLowerCase().endsWith(".xmi") === true;
   },
   
-  decode: (input: string): unknown => {
-    return parseXml(input); // Convert XML to a JSON-like structure
+  decode: (input: string): ParsedData => {
+    return new ParsedData([parseXml(input)]); // Convert XML to a JSON-like structure
   },
 
   encode: (data: unknown): string => {
