@@ -62,9 +62,13 @@ const cliCommand = new Command()
     "-w, --webui",
     "Start a web server to display data as a tree with filtering capabilities.",
   )
+  .option(
+    "-i, --input-format <format:string>",
+    "Input format (e.g., JSON, YAML, XML, etc.). Useful for piped input or overriding auto-detection.",
+  )
   .action(
     async (
-      { query, interactive, interactiveWithOutput, webui, outputFormat },
+      { query, interactive, interactiveWithOutput, webui, outputFormat, inputFormat },
       files: string | undefined,
     ) => {
       // Validate mutually exclusive options
@@ -123,6 +127,18 @@ const cliCommand = new Command()
             }
           }
 
+          // Use the `-i` option if no type prefix is specified
+          if (!explicitType && inputFormat) {
+            inputPlugin = plugins.find(
+              (plugin) => plugin.name.toLowerCase() === inputFormat.toLowerCase(),
+            );
+
+            if (!inputPlugin) {
+              console.error(`❌ Unknown input format: ${inputFormat}`);
+              Deno.exit(1);
+            }
+          }
+
           // Read the file content
           const input = await Deno.readTextFile(filePath);
 
@@ -137,7 +153,7 @@ const cliCommand = new Command()
 
           try {
             // Parse the input into a JSON-like structure
-            const parsedData = inputPlugin.decode(input, {...context, inputFormat: explicitType});
+            const parsedData = inputPlugin.decode(input, { ...context, inputFormat: explicitType });
             data.push(parsedData);
           } catch (error) {
             console.error(
@@ -197,7 +213,7 @@ const cliCommand = new Command()
           // Determine the output plugin
           const outputPlugin = outputFormat
             ? plugins.find((plugin) =>
-              plugin.name.toLowerCase() === outputFormat.toLowerCase()
+              plugin.name.toLowerCase() === outputFormat.toLowerCase(),
             )
             : plugins[0]; // Default to the first plugin
 
