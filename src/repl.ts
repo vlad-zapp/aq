@@ -1,4 +1,4 @@
-import "./replExtensions.ts";
+import { tracked } from "./replExtensions.ts";
 import { evaluateCommand, autocomplete, getCompletionKeys } from "./replHelpers.ts";
 
 export class MiniRepl {
@@ -13,7 +13,7 @@ export class MiniRepl {
   #done: boolean = false;
 
   async start(data: unknown): Promise<unknown> {
-    (globalThis as any).data = data;
+    (globalThis as any).data = tracked(data);
     await Deno.stdin.setRaw(true);
 
     this.#writeLn("💡 Type JavaScript expressions to interact with the data.");

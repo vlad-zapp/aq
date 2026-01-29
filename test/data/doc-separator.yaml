@@ -1,0 +1,18 @@
+---
+# High-level site definition
+schema: pegleg/SiteDefinition/v1
+metadata:
+  schema: metadata/Document/v1
+  layeringDefinition:
+    abstract: false
+    layer: site
+  # Replace with the site name
+  name: test-site
+  storagePolicy: cleartext
+data:
+  site_type: cruiser
+  repositories:
+    global:
+      revision: 1.0.0
+      url: ssh://git@example.com/repo
+...

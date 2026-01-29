@@ -13,6 +13,7 @@ import { AqPlugin } from "../infrastructure/aqPlugin.ts";
 import {
   type CommentEntry,
   getComment,
+  getComments,
   hasComments,
   setComment,
 } from "../infrastructure/comments.ts";
@@ -170,6 +171,28 @@ function extractDocComments(doc: Document, jsValue: unknown): void {
           ...existing,
           before: headerText,
         });
+
+        // Remove the promoted header text from the first key's before comment
+        // to avoid duplication (extractCommentsFromNode already placed it there)
+        const firstKeyStr = String((firstPair.key as Scalar).value);
+        const firstKeyComment = getComment(jsValue, firstKeyStr);
+        if (firstKeyComment?.before) {
+          const remaining = firstKeyComment.before === headerText
+            ? undefined
+            : firstKeyComment.before.startsWith(headerText + "\n")
+              ? firstKeyComment.before.slice(headerText.length + 1)
+              : firstKeyComment.before;
+          if (remaining || firstKeyComment.after) {
+            setComment(jsValue as object, firstKeyStr, {
+              ...(remaining ? { before: remaining } : {}),
+              ...(firstKeyComment.after ? { after: firstKeyComment.after } : {}),
+            });
+          } else {
+            // Remove the comment entry entirely
+            const comments = getComments(jsValue);
+            if (comments) delete comments[firstKeyStr];
+          }
+        }
       }
     }
   }
@@ -306,7 +329,7 @@ export const YamlPlugin: AqPlugin = {
 
     const yamlDocs = parseAllDocuments(input);
     const docs: unknown[] = yamlDocs.length > 0
-      ? yamlDocs.map((d) => d.toJS())
+      ? yamlDocs.map((d) => d.toJS({ maxAliasCount: -1 }))
       : [null]; // comment-only input yields a single null document
     const isMulti = docs.length > 1;
 

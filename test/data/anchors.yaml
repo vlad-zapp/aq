@@ -1,0 +1,122 @@
+---
+# Software versions
+schema: versions/v1
+metadata:
+  name: software-versions
+data:
+  # Chart references with anchors
+  chart_refs:
+    ingress:
+      ingress-nginx: &ingress_chart
+        location: https://example.com/charts/ingress-nginx-4.13.0.tgz
+        subpath: ingress-nginx
+        type: tar
+    ceph:
+      ceph-provisioners: &ceph_prov_chart
+        location: https://example.com/charts/ceph-provisioners.tgz
+        subpath: ceph-provisioners
+        type: tar
+      ceph-client: &ceph_client_chart
+        location: https://example.com/charts/ceph-client.tgz
+        subpath: ceph-client
+        type: tar
+    db:
+      mariadb: &mariadb_chart
+        location: https://example.com/charts/mariadb.tgz
+        subpath: mariadb
+        type: tar
+      mariadb-healer: &mariadb_healer_chart
+        location: https://example.com/charts/mariadb-healer.tgz
+        subpath: mariadb-healer
+        type: tar
+    cache:
+      memcached: &memcached_chart
+        location: https://example.com/charts/memcached.tgz
+        subpath: memcached
+        type: tar
+    queue:
+      rabbitmq: &rabbitmq_chart
+        location: https://example.com/charts/rabbitmq.tgz
+        subpath: rabbitmq
+        type: tar
+  # Charts using aliases
+  charts:
+    kubernetes:
+      ingress: *ingress_chart
+    osh:
+      ingress: *ingress_chart
+      mariadb: *mariadb_chart
+      mariadb-healer: *mariadb_healer_chart
+      memcached: *memcached_chart
+      rabbitmq: *rabbitmq_chart
+      ceph-provisioners: *ceph_prov_chart
+      ceph-client: *ceph_client_chart
+    monitoring:
+      mariadb: *mariadb_chart
+      memcached: *memcached_chart
+      rabbitmq: *rabbitmq_chart
+  # Image references with anchors
+  images:
+    common:
+      alpine: &alpine registry.example.com/alpine@sha256:abc123
+      nginx: &nginx registry.example.com/nginx@sha256:def456
+      busybox: &busybox registry.example.com/busybox@sha256:ghi789
+    services:
+      ingress_controller: &ingress_ctrl registry.example.com/ingress-controller@sha256:jkl012
+      ingress_backend: &ingress_backend registry.example.com/ingress-backend@sha256:mno345
+      mariadb_server: &mariadb_img registry.example.com/mariadb@sha256:pqr678
+      memcached_server: &memcached_img registry.example.com/memcached@sha256:stu901
+      rabbitmq_server: &rabbitmq_img registry.example.com/rabbitmq@sha256:vwx234
+      ceph_daemon: &ceph_daemon registry.example.com/ceph-daemon@sha256:yza567
+    # Alias reuse across sections
+    kubernetes:
+      ingress:
+        controller: *ingress_ctrl
+        backend: *ingress_backend
+        init: *alpine
+      utils: *busybox
+    osh:
+      keystone:
+        api: *nginx
+        db: *mariadb_img
+        cache: *memcached_img
+        queue: *rabbitmq_img
+        init: *alpine
+      glance:
+        api: *nginx
+        db: *mariadb_img
+        storage: *ceph_daemon
+        init: *alpine
+      nova:
+        api: *nginx
+        db: *mariadb_img
+        cache: *memcached_img
+        queue: *rabbitmq_img
+        init: *alpine
+      neutron:
+        server: *nginx
+        db: *mariadb_img
+        queue: *rabbitmq_img
+        init: *alpine
+      heat:
+        api: *nginx
+        db: *mariadb_img
+        cache: *memcached_img
+        queue: *rabbitmq_img
+        init: *alpine
+      cinder:
+        api: *nginx
+        db: *mariadb_img
+        cache: *memcached_img
+        queue: *rabbitmq_img
+        init: *alpine
+      horizon:
+        web: *nginx
+        db: *mariadb_img
+        cache: *memcached_img
+        init: *alpine
+      barbican:
+        api: *nginx
+        db: *mariadb_img
+        queue: *rabbitmq_img
+        init: *alpine
