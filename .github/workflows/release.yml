@@ -30,6 +30,9 @@ jobs:
         with:
           deno-version: v1.x
 
+      - name: Embed assets
+        run: deno task embed-assets
+
       - name: Build binary
         run: deno compile --allow-all --unstable -o aq-${{ matrix.target }} --target ${{ matrix.target }} src/main.ts
 
@@ -58,6 +61,9 @@ jobs:
         with:
           deno-version: v1.x
 
+      - name: Embed assets
+        run: deno task embed-assets
+
       - name: Build binary
         run: deno compile --allow-all --unstable -o aq-${{ matrix.target }} --target ${{ matrix.target }} src/main.ts
 
@@ -84,6 +90,9 @@ jobs:
         uses: denoland/setup-deno@v1
         with:
           deno-version: v1.x
+
+      - name: Embed assets
+        run: deno task embed-assets
 
       - name: Build binary
         run: deno compile --allow-all --unstable -o aq-${{ matrix.target }} --target ${{ matrix.target }} src/main.ts
