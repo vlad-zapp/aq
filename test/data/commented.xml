@@ -1,0 +1,11 @@
+<!-- Root element -->
+<person>
+  <!-- Person name -->
+  <name>John</name>
+  <age>30</age>
+  <!-- Address section -->
+  <address>
+    <street>123 Main St</street>
+    <city>Springfield</city>
+  </address>
+</person>

@@ -1,3 +1,11 @@
+/** Build a property path, using bracket notation for keys with special chars. */
+function joinPath(path: string, key: string): string {
+    if (/^[\w$]+$/u.test(key) && !/^\d/.test(key)) {
+        return path ? `${path}.${key}` : key;
+    }
+    return path ? `${path}["${key}"]` : `["${key}"]`;
+}
+
 export function aqFindByLocator(
     locator: (parent: string, name: string, value: unknown) => boolean,
     root?: object
@@ -17,15 +25,15 @@ export function aqFindByLocator(
         if (node && typeof node === "object") {
             const foundEntries = Object.entries(node).filter(([key, value]) => {
                 if (typeof key === "string") {
-                    const fullPath = path ? `${path}.${key}` : key;
+                    const fullPath = joinPath(path, key);
                     return locator(fullPath, key, value);
                 }
                 return false;
             });
 
             foundEntries.forEach(([key, value]) => {
-                const fullPath = path ? `${path}.${key}` : key;
-                results.push({ path: fullPath, value }); // Push as an object with `path` and `value`
+                const fullPath = joinPath(path, key);
+                results.push({ path: fullPath, value });
             });
 
             // Recursively search in objects, arrays, and maps
@@ -35,8 +43,7 @@ export function aqFindByLocator(
                 node.forEach((value, key) => search(value, `${path}[${key}]`));
             } else {
                 Object.entries(node).forEach(([key, value]) => {
-                    const newPath = path ? `${path}.${key}` : key;
-                    search(value, newPath);
+                    search(value, joinPath(path, key));
                 });
             }
         }
@@ -53,7 +60,7 @@ export function aqFindByName(this: object, locator: string) {
 
 export function aqFindByFullName(this: object, locator: string) {
     const locatorRx = new RegExp(locator);
-    return aqFindByLocator((parent, name, obj) => locatorRx.test(`${parent}.${name}`), this);
+    return aqFindByLocator((parent, name, obj) => locatorRx.test(joinPath(parent, name)), this);
 }
 
 export function aqFindByValue(this: object, locator: string) {
@@ -104,6 +111,23 @@ export function aqDiff(...objects: object[]): object {
     return diffHelper(allKeys, objects);
 }
 
+import {
+    getComment,
+    getComments,
+    type CommentMap,
+    type CommentEntry,
+} from "./infrastructure/comments.ts";
+
+export function aqComments(
+    this: object,
+    key?: string,
+): CommentMap | CommentEntry | undefined {
+    if (key !== undefined) {
+        return getComment(this, key);
+    }
+    return getComments(this);
+}
+
 (globalThis as any).aqDiff = aqDiff;
 
 Object.defineProperty(Object.prototype, "aqFindByLocator", {
@@ -130,7 +154,16 @@ Object.defineProperty(Object.prototype, "aqFindByValue", {
     configurable: true,
 });
 
+Object.defineProperty(Object.prototype, "aqComments", {
+    value: aqComments,
+    writable: true,
+    configurable: true,
+});
+
 (globalThis as any).aqFindByLocator = aqFindByLocator;
 (globalThis as any).aqFindByName = aqFindByName;
 (globalThis as any).aqFindByFullName = aqFindByFullName;
 (globalThis as any).aqFindByValue = aqFindByValue;
+(globalThis as any).aqComments = function (obj: object, key?: string) {
+    return aqComments.call(obj, key);
+};

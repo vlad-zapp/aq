@@ -1,0 +1,13 @@
+# Configuration file header
+title = "My Config"  # inline title comment
+
+# About the owner
+name = "John"
+# Age setting
+age = 30
+
+# Address section
+[address]
+street = "123 Main St"
+city = "Springfield"
+# Trailing comment

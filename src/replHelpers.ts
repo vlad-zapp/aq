@@ -41,6 +41,7 @@ export function getCompletionKeys(
       "aqFindByName",
       "aqFindByFullName",
       "aqFindByValue",
+      "aqComments",
     ].filter((x) => x.startsWith(prefix)).forEach((k) => keys.add(k));
   }
 

@@ -7,9 +7,10 @@ import { TomlPlugin } from "./plugins/tomlPlugin.ts";
 import { IniPlugin } from "./plugins/iniPlugin.ts";
 import { TextPlugin, PlainTextPlugin } from "./plugins/textPlugin.ts";
 import { MiniRepl } from "./repl.ts";
-import { detectPlugin, getErrorMessage } from "./utils.ts";
+import { detectPlugin, getErrorMessage, unwrapParsedData } from "./utils.ts";
 import { version } from "../version.ts";
 import { ParsedData } from "./infrastructure/ParsedData.ts";
+import { hasComments } from "./infrastructure/comments.ts";
 import { startWebServer } from "./webui/webServer.ts";
 
 // Register plugins
@@ -109,21 +110,20 @@ const cliCommand = new Command()
           let filePath = fileEntry;
 
           // Check for type prefix (e.g., "json:filename")
-          const typeMatch = /^(\w+):(.+)$/.exec(fileEntry);
+          // Only treat as a prefix if the part before ":" is a known plugin name
+          // (avoids misinterpreting Windows paths like "C:\file.txt")
           let explicitType = "";
-          if (typeMatch) {
-            const [, type, path] = typeMatch;
-            filePath = path;
-            explicitType = type;
-
-            // Find the plugin by name
-            inputPlugin = plugins.find(
-              (plugin) => plugin.name.toLowerCase() === type.toLowerCase(),
+          const colonIdx = fileEntry.indexOf(":");
+          if (colonIdx > 0) {
+            const candidateType = fileEntry.slice(0, colonIdx);
+            const candidatePath = fileEntry.slice(colonIdx + 1);
+            const matchedPlugin = plugins.find(
+              (p) => p.name.toLowerCase() === candidateType.toLowerCase(),
             );
-
-            if (!inputPlugin) {
-              console.error(`❌ Unknown input type: ${type}`);
-              Deno.exit(1);
+            if (matchedPlugin) {
+              filePath = candidatePath;
+              explicitType = candidateType;
+              inputPlugin = matchedPlugin;
             }
           }
 
@@ -163,9 +163,11 @@ const cliCommand = new Command()
           }
         }
 
+        const cleanData = unwrapParsedData(data);
+
         if (interactive || interactiveWithOutput) {
           if (files) {
-            result = await new MiniRepl().start(data);
+            result = await new MiniRepl().start(cleanData);
           } else {
             if (Deno.build.os === "windows" && !Deno.stdin.isTerminal()) {
               console.error(
@@ -202,11 +204,11 @@ const cliCommand = new Command()
             Deno.exit(0);
           }
         } else if (webui) {
-          await startWebServer(data);
+          await startWebServer(cleanData);
           return;
         } else {
           // Apply the query (if provided)
-          result = query ? queryNodes(data, query) : data;
+          result = query ? queryNodes(cleanData, query) : cleanData;
         }
 
         if (!interactive) {
@@ -222,6 +224,18 @@ const cliCommand = new Command()
               `❌ Could not find plugin for output format: ${outputFormat}`,
             );
             Deno.exit(1);
+          }
+
+          // Warn if comments will be lost
+          const commentFormats = new Set(["YAML", "JSON", "TOML", "INI", "XML"]);
+          if (
+            result && typeof result === "object" &&
+            hasComments(result) &&
+            !commentFormats.has(outputPlugin.name)
+          ) {
+            console.error(
+              "⚠ Comments from source were omitted (output format does not support comments)",
+            );
           }
 
           // Encode the result using the output plugin

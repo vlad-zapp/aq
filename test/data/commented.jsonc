@@ -1,0 +1,11 @@
+// This is a JSONC file
+{
+  // Person name
+  "name": "John",
+  "age": 30,  // inline age comment
+  /* Address block */
+  "address": {
+    "street": "123 Main St",
+    "city": "Springfield"
+  }
+}

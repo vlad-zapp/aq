@@ -14,8 +14,14 @@ export async function startWebServer(data: unknown) {
     throw new Error("Embedded index.html not found!");
   }
 
-  // Inject the data into the HTML
-  html = html.replace("let data = {};", `let data = ${JSON.stringify(data, null, 2)};`);
+  // Inject the data into the HTML (escape < to prevent script tag breakout)
+  let jsonData: string;
+  try {
+    jsonData = JSON.stringify(data, null, 2).replace(/</g, "\\u003c");
+  } catch {
+    jsonData = '"[Error: could not serialize data]"';
+  }
+  html = html.replace("let data = {};", `let data = ${jsonData};`);
 
   serve(async (req) => {
     const url = new URL(req.url);

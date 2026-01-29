@@ -5,7 +5,8 @@
   "tasks": {
     "embed-assets": "deno run --allow-all embed-assets.ts",
     "start": "deno task embed-assets && deno run --allow-all src/main.ts",
-    "build" : "deno task embed-assets && deno compile --allow-all --output ./aq src/main.ts"
+    "build" : "deno task embed-assets && deno compile --allow-all --output ./aq src/main.ts",
+    "test": "deno test --allow-read --allow-env"
   },
   "fmt": {
     "options": {

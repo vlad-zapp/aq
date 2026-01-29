@@ -1,0 +1,22 @@
+# This is a header comment
+name: John  # inline name comment
+# Age of the person
+age: 30
+isEmployed: true
+# Address block
+address:
+  # Street info
+  street: 123 Main St  # primary address
+  city: Springfield
+  zip: 12345
+children:
+  # First child
+  - name: Alice
+    age: 10
+    hobbies:
+      - drawing
+      - cycling
+  # Second child
+  - name: Bob
+    age: 8
+# Trailing comment

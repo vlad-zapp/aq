@@ -1,0 +1,8 @@
+# First document header
+name: John  # person name
+age: 30
+---
+# Second document header
+name: Jane
+age: 25
+# Trailing comment
