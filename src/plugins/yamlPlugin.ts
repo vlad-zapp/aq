@@ -1,5 +1,7 @@
 import {
+  Alias,
   Document,
+  isAlias,
   isMap,
   isScalar,
   isSeq,
@@ -17,6 +19,13 @@ import {
   hasComments,
   setComment,
 } from "../infrastructure/comments.ts";
+import {
+  type AnchorEntry,
+  type AnchorMap,
+  getAnchors,
+  hasAnchors,
+  setAnchor,
+} from "../infrastructure/anchors.ts";
 import { MULTI_DOC, ParsedData } from "../infrastructure/ParsedData.ts";
 
 /**
@@ -25,10 +34,9 @@ import { MULTI_DOC, ParsedData } from "../infrastructure/ParsedData.ts";
  */
 function norm(text: string | null | undefined): string | null {
   if (text == null) return null;
-  const lines = text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+  const lines = text.split("\n").map((l) => l.trim());
+  // Trim leading empty lines only; preserve internal and trailing ones
+  while (lines.length > 0 && lines[0].length === 0) lines.shift();
   return lines.length > 0 ? lines.join("\n") : null;
 }
 
@@ -39,7 +47,7 @@ function norm(text: string | null | undefined): string | null {
 function toAst(text: string): string {
   return text
     .split("\n")
-    .map((l) => " " + l)
+    .map((l) => (l.length > 0 ? " " + l : ""))
     .join("\n");
 }
 
@@ -97,6 +105,13 @@ function extractCommentsFromNode(
         extractCommentsFromNode(pair.value, childValue);
       }
     }
+
+    // Trailing comment after the last entry (map.comment)
+    const mapTrailing = norm(map.comment);
+    if (mapTrailing) {
+      const existing = getComment(obj, "#");
+      setComment(obj, "#", { ...existing, after: mapTrailing });
+    }
   } else if (isSeq(node)) {
     const arr = jsValue as unknown[];
     const seq = node as YAMLSeq;
@@ -135,6 +150,13 @@ function extractCommentsFromNode(
       if (arr[i] && typeof arr[i] === "object") {
         extractCommentsFromNode(item, arr[i]);
       }
+    }
+
+    // Trailing comment after the last item (seq.comment)
+    const seqTrailing = norm(seq.comment);
+    if (seqTrailing) {
+      const existing = getComment(arr, "#");
+      setComment(arr as object, "#", { ...existing, after: seqTrailing });
     }
   }
 }
@@ -215,18 +237,19 @@ function attachCommentsToNode(
   jsValue: unknown,
   isRoot: boolean,
 ): void {
-  if (!jsValue || typeof jsValue !== "object" || !hasComments(jsValue)) return;
+  if (!jsValue || typeof jsValue !== "object") return;
 
   if (isMap(node)) {
     const obj = jsValue as Record<string, unknown>;
     const map = node as YAMLMap;
+    const objHasComments = hasComments(jsValue);
 
     for (let i = 0; i < map.items.length; i++) {
       const pair = map.items[i] as Pair;
       const key = pair.key as Scalar;
       const keyStr = String(key.value);
 
-      const comment = getComment(obj, keyStr);
+      const comment = objHasComments ? getComment(obj, keyStr) : undefined;
       if (comment?.before) {
         if (i === 0 && !isRoot) {
           // Nested first key: set on map.commentBefore
@@ -248,13 +271,22 @@ function attachCommentsToNode(
         attachCommentsToNode(pair.value, childValue, false);
       }
     }
+
+    // Trailing comment after the last entry (non-root only; root handled by attachDocComments)
+    if (!isRoot && objHasComments) {
+      const containerComment = getComment(obj, "#");
+      if (containerComment?.after) {
+        map.comment = toAst(containerComment.after);
+      }
+    }
   } else if (isSeq(node)) {
     const arr = jsValue as unknown[];
     const seq = node as YAMLSeq;
+    const arrHasComments = hasComments(jsValue);
 
     for (let i = 0; i < seq.items.length; i++) {
       const item = seq.items[i];
-      const comment = getComment(arr, String(i));
+      const comment = arrHasComments ? getComment(arr, String(i)) : undefined;
 
       if (comment?.before) {
         if (i === 0) {
@@ -272,6 +304,14 @@ function attachCommentsToNode(
       // Recurse
       if (arr[i] && typeof arr[i] === "object") {
         attachCommentsToNode(item, arr[i], false);
+      }
+    }
+
+    // Trailing comment after the last item
+    if (arrHasComments) {
+      const containerComment = getComment(arr, "#");
+      if (containerComment?.after) {
+        seq.comment = toAst(containerComment.after);
       }
     }
   }
@@ -301,6 +341,123 @@ function attachDocComments(doc: Document, jsValue: unknown): void {
 
   // Attach per-key/item comments
   attachCommentsToNode(doc.contents, jsValue, true);
+}
+
+// ---- ANCHOR / ALIAS PRESERVATION ----
+
+/**
+ * Walk the npm:yaml AST and record which values are anchors or aliases.
+ * Stores metadata on the JS parent object via ANCHORS symbol.
+ */
+function extractAnchorsFromNode(node: unknown, jsValue: unknown): void {
+  if (!jsValue || typeof jsValue !== "object") return;
+
+  if (isMap(node)) {
+    const map = node as YAMLMap;
+    const obj = jsValue as Record<string, unknown>;
+
+    for (const item of map.items) {
+      const pair = item as Pair;
+      const key = pair.key as Scalar;
+      const keyStr = String(key.value);
+      const val = pair.value;
+
+      if (isAlias(val)) {
+        setAnchor(obj, keyStr, { alias: (val as any).source });
+      } else {
+        if (val && typeof val === "object" && "anchor" in val && val.anchor) {
+          setAnchor(obj, keyStr, { anchor: val.anchor as string });
+        }
+        // Recurse into non-alias values
+        const childValue = obj[keyStr];
+        if (childValue && typeof childValue === "object") {
+          extractAnchorsFromNode(val, childValue);
+        }
+      }
+    }
+  } else if (isSeq(node)) {
+    const seq = node as YAMLSeq;
+    const arr = jsValue as unknown[];
+
+    for (let i = 0; i < seq.items.length; i++) {
+      const item = seq.items[i];
+
+      if (isAlias(item)) {
+        setAnchor(arr as object, String(i), {
+          alias: (item as any).source,
+        });
+      } else {
+        if (
+          item && typeof item === "object" && "anchor" in item && item.anchor
+        ) {
+          setAnchor(arr as object, String(i), {
+            anchor: item.anchor as string,
+          });
+        }
+        if (arr[i] && typeof arr[i] === "object") {
+          extractAnchorsFromNode(item, arr[i]);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Apply stored anchor/alias metadata back to a npm:yaml AST.
+ * Sets `node.anchor` for anchor definitions and replaces alias positions
+ * with Alias nodes.
+ */
+function applyAnchorsToNode(node: unknown, jsValue: unknown): void {
+  if (!jsValue || typeof jsValue !== "object") return;
+
+  const anchorMap = getAnchors(jsValue);
+
+  if (isMap(node)) {
+    const map = node as YAMLMap;
+    const obj = jsValue as Record<string, unknown>;
+
+    for (let i = 0; i < map.items.length; i++) {
+      const pair = map.items[i] as Pair;
+      const key = pair.key as Scalar;
+      const keyStr = String(key.value);
+      const entry = anchorMap?.[keyStr];
+
+      if (entry?.alias) {
+        // Replace the expanded value with an alias node
+        (pair as any).value = new Alias(entry.alias);
+      } else {
+        if (entry?.anchor && pair.value && typeof pair.value === "object") {
+          (pair.value as any).anchor = entry.anchor;
+        }
+        // Recurse into children
+        const childValue = obj[keyStr];
+        if (childValue && typeof childValue === "object") {
+          applyAnchorsToNode(pair.value, childValue);
+        }
+      }
+    }
+  } else if (isSeq(node)) {
+    const seq = node as YAMLSeq;
+    const arr = jsValue as unknown[];
+
+    for (let i = 0; i < seq.items.length; i++) {
+      const entry = anchorMap?.[String(i)];
+
+      if (entry?.alias) {
+        seq.items[i] = new Alias(entry.alias) as any;
+      } else {
+        if (
+          entry?.anchor && seq.items[i] &&
+          typeof seq.items[i] === "object"
+        ) {
+          (seq.items[i] as any).anchor = entry.anchor;
+        }
+        if (arr[i] && typeof arr[i] === "object") {
+          applyAnchorsToNode(seq.items[i], arr[i]);
+        }
+      }
+    }
+  }
 }
 
 // ---- PLUGIN ----
@@ -337,11 +494,12 @@ export const YamlPlugin: AqPlugin = {
       (docs as any)[MULTI_DOC] = true;
     }
 
-    // Extract comments from AST
+    // Extract comments and anchors from AST
     for (let i = 0; i < yamlDocs.length; i++) {
       const jsValue = docs[i];
       if (jsValue && typeof jsValue === "object") {
         extractDocComments(yamlDocs[i], jsValue);
+        extractAnchorsFromNode(yamlDocs[i].contents, jsValue);
       }
     }
 
@@ -362,6 +520,7 @@ export const YamlPlugin: AqPlugin = {
         .map((item) => {
           const doc = new Document(item);
           attachDocComments(doc, item);
+          applyAnchorsToNode(doc.contents, item);
           return doc.toString({ lineWidth: 0 });
         })
         .join("---\n");
@@ -369,6 +528,7 @@ export const YamlPlugin: AqPlugin = {
 
     const doc = new Document(data);
     attachDocComments(doc, data);
+    applyAnchorsToNode(doc.contents, data);
     return doc.toString({ lineWidth: 0 });
   },
 };

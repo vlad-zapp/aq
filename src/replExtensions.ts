@@ -118,6 +118,13 @@ import {
     type CommentMap,
     type CommentEntry,
 } from "./infrastructure/comments.ts";
+import {
+    getAnchor,
+    getAnchors,
+    setAnchor,
+    type AnchorMap,
+    type AnchorEntry,
+} from "./infrastructure/anchors.ts";
 
 export function aqComments(
     this: object,
@@ -127,6 +134,16 @@ export function aqComments(
         return getComment(this, key);
     }
     return getComments(this);
+}
+
+export function aqAnchors(
+    this: object,
+    key?: string,
+): AnchorMap | AnchorEntry | undefined {
+    if (key !== undefined) {
+        return getAnchor(this, key);
+    }
+    return getAnchors(this);
 }
 
 // ---- Tracked Proxy for .comment() / .commentAfter() ----
@@ -177,6 +194,28 @@ export function tracked(obj: unknown, parent?: object, key?: string): unknown {
                     return receiver;
                 };
             }
+            // .anchor(name?) — get/set anchor name
+            if (prop === "anchor") {
+                const p = parent, k = key;
+                return function (name?: string) {
+                    if (!p || !k) return undefined;
+                    if (arguments.length === 0) return getAnchor(p, k)?.anchor;
+                    const existing = getAnchor(p, k) ?? {};
+                    setAnchor(p, k, { ...existing, anchor: name ?? undefined, alias: undefined });
+                    return receiver;
+                };
+            }
+            // .alias(name?) — get/set alias reference
+            if (prop === "alias") {
+                const p = parent, k = key;
+                return function (name?: string) {
+                    if (!p || !k) return undefined;
+                    if (arguments.length === 0) return getAnchor(p, k)?.alias;
+                    const existing = getAnchor(p, k) ?? {};
+                    setAnchor(p, k, { ...existing, alias: name ?? undefined, anchor: undefined });
+                    return receiver;
+                };
+            }
 
             const value = Reflect.get(target, prop, receiver);
 
@@ -186,9 +225,10 @@ export function tracked(obj: unknown, parent?: object, key?: string): unknown {
                 _ct.key = prop;
             }
 
-            // Recursively wrap child objects so the chain continues
-            if (value !== null && value !== undefined && typeof value === "object") {
-                return tracked(value, target, String(prop));
+            // Recursively wrap child objects so the chain continues.
+            // Skip wrapping for Symbol-keyed accesses (internal metadata like COMMENTS, ANCHORS).
+            if (typeof prop === "string" && value !== null && value !== undefined && typeof value === "object") {
+                return tracked(value, target, prop);
             }
 
             return value;
@@ -237,6 +277,24 @@ function _primitiveCommentAfter(this: unknown, text?: string): string | undefine
     return this;
 }
 
+function _primitiveAnchor(this: unknown, name?: string): string | undefined | unknown {
+    const { parent, key } = _ct;
+    if (!parent || !key) return undefined;
+    if (arguments.length === 0) return getAnchor(parent, key)?.anchor;
+    const existing = getAnchor(parent, key) ?? {};
+    setAnchor(parent, key, { ...existing, anchor: name ?? undefined, alias: undefined });
+    return this;
+}
+
+function _primitiveAlias(this: unknown, name?: string): string | undefined | unknown {
+    const { parent, key } = _ct;
+    if (!parent || !key) return undefined;
+    if (arguments.length === 0) return getAnchor(parent, key)?.alias;
+    const existing = getAnchor(parent, key) ?? {};
+    setAnchor(parent, key, { ...existing, alias: name ?? undefined, anchor: undefined });
+    return this;
+}
+
 for (const proto of [Number.prototype, String.prototype, Boolean.prototype] as any[]) {
     Object.defineProperty(proto, "comment", {
         value: _primitiveComment,
@@ -245,6 +303,16 @@ for (const proto of [Number.prototype, String.prototype, Boolean.prototype] as a
     });
     Object.defineProperty(proto, "commentAfter", {
         value: _primitiveCommentAfter,
+        writable: true,
+        configurable: true,
+    });
+    Object.defineProperty(proto, "anchor", {
+        value: _primitiveAnchor,
+        writable: true,
+        configurable: true,
+    });
+    Object.defineProperty(proto, "alias", {
+        value: _primitiveAlias,
         writable: true,
         configurable: true,
     });
@@ -260,6 +328,7 @@ for (const [name, fn] of Object.entries({
     aqFindByFullName,
     aqFindByValue,
     aqComments,
+    aqAnchors,
 })) {
     Object.defineProperty(Object.prototype, name, {
         value: fn,
@@ -274,4 +343,7 @@ for (const [name, fn] of Object.entries({
 (globalThis as any).aqFindByValue = aqFindByValue;
 (globalThis as any).aqComments = function (obj: object, key?: string) {
     return aqComments.call(obj, key);
+};
+(globalThis as any).aqAnchors = function (obj: object, key?: string) {
+    return aqAnchors.call(obj, key);
 };

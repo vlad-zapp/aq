@@ -3,92 +3,727 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Data Viewer</title>
-  <!-- Include JSONEditor CSS -->
-  <link rel="stylesheet" href="/assets/jsoneditor.min.css">
+  <title>aq - Data Viewer</title>
   <style>
+    :root {
+      --bg: #0d1117;
+      --bg-raised: #161b22;
+      --bg-input: #1c2128;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-muted: #6e7681;
+      --text-subtle: #484f58;
+      --key: #79c0ff;
+      --string: #a5d6ff;
+      --number: #ffa657;
+      --boolean: #d2a8ff;
+      --null: #6e7681;
+      --comment: #6a9955;
+      --bracket: #6e7681;
+      --toggle: #484f58;
+      --accent: #58a6ff;
+      --accent-hover: #79c0ff;
+      --error: #f85149;
+      --scrollbar: #30363d;
+      --scrollbar-hover: #484f58;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #000; /* Black background */
-      color: #ccc; /* Gray text */
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .toolbar-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .toolbar-btn:hover { color: var(--text); border-color: var(--text-muted); }
+    .toolbar-sep { width: 1px; height: 20px; background: var(--border); }
+
+    /* ── Command bar ── */
+    .command-bar {
+      display: flex;
+      align-items: center;
+      background: var(--bg-raised);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      position: relative;
+    }
+    .command-prompt {
+      color: var(--accent);
+      padding: 0 4px 0 12px;
+      font-size: 14px;
+      user-select: none;
     }
     #command {
-      width: 100%;
-      padding: 10px;
-      font-size: 18px;
-      background-color: #222; /* Dark gray input background */
-      color: #fff; /* White text */
+      flex: 1;
+      background: transparent;
       border: none;
       outline: none;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      padding: 10px 12px 10px 0;
     }
-    #editor {
-      height: calc(100vh - 50px); /* Full height minus input field */
-      background-color: #111; /* Darker background for the editor */
-    }
+    #command::placeholder { color: var(--text-subtle); }
+
+    /* ── Autocomplete hints ── */
     #hints {
       position: absolute;
-      background: #222;
-      color: #fff;
-      padding: 5px;
-      border: 1px solid #444;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      border-top: none;
       display: none;
-      z-index: 1000; /* Ensure it appears above other elements */
-      max-width: 100%; /* Prevent overflow */
-      overflow-y: auto; /* Add scrolling if needed */
+      z-index: 1000;
+      max-height: 200px;
+      overflow-y: auto;
     }
-    /* Hide the Filter button */
-    .jsoneditor-transform {
-      display: none !important;
+    .hint-item {
+      padding: 4px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text-muted);
     }
-    /* Hide the Sort button */
-    .jsoneditor-sort {
-      display: none !important;
+    .hint-item:hover, .hint-item.selected { background: var(--bg-input); color: var(--text); }
+
+    /* ── Error bar ── */
+    .error-bar {
+      display: none;
+      padding: 6px 12px;
+      background: #2d1214;
+      border-bottom: 1px solid #5a1e22;
+      color: var(--error);
+      font-size: 13px;
+      flex-shrink: 0;
     }
+    .error-bar.visible { display: block; }
+
+    /* ── Breadcrumb ── */
+    .breadcrumb {
+      padding: 6px 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      min-height: 28px;
+    }
+    .breadcrumb span { color: var(--text-subtle); }
+    .breadcrumb .crumb { color: var(--text-muted); cursor: pointer; }
+    .breadcrumb .crumb:hover { color: var(--accent); }
+
+    /* ── Tree container ── */
+    .tree-container {
+      flex: 1;
+      overflow: auto;
+      padding: 8px 0;
+    }
+    .tree-container::-webkit-scrollbar { width: 8px; height: 8px; }
+    .tree-container::-webkit-scrollbar-track { background: transparent; }
+    .tree-container::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
+    .tree-container::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+
+    /* ── Tree nodes ── */
+    .tree-node { line-height: 1.6; }
+
+    .tree-line {
+      display: flex;
+      align-items: flex-start;
+      padding: 0 12px;
+      min-height: 24px;
+      position: relative;
+    }
+    .tree-line:hover { background: rgba(136, 198, 255, 0.04); }
+    .tree-line:hover .comment-add { opacity: 1; }
+
+    .indent { display: inline-block; width: 20px; flex-shrink: 0; }
+
+    /* Toggle */
+    .toggle {
+      width: 16px;
+      height: 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--toggle);
+      flex-shrink: 0;
+      user-select: none;
+      font-size: 10px;
+    }
+    .toggle:hover { color: var(--text); }
+    .toggle-placeholder { width: 16px; flex-shrink: 0; }
+
+    /* Key-value */
+    .node-key { color: var(--key); margin-right: 4px; }
+    .node-colon { color: var(--text-subtle); margin-right: 6px; }
+    .node-value { flex-shrink: 0; }
+    .node-value.string { color: var(--string); }
+    .node-value.number { color: var(--number); }
+    .node-value.boolean { color: var(--boolean); }
+    .node-value.null { color: var(--null); font-style: italic; }
+    .node-bracket { color: var(--bracket); }
+    .node-summary { color: var(--text-subtle); font-style: italic; font-size: 12px; margin-left: 4px; }
+    .node-comma { color: var(--text-subtle); }
+    .node-index { color: var(--text-subtle); margin-right: 4px; font-size: 12px; }
+
+    /* ── Comments ── */
+    .comment-before {
+      display: block;
+      padding: 0 12px;
+      color: var(--comment);
+      font-style: italic;
+      font-size: 13px;
+      line-height: 1.5;
+      cursor: pointer;
+      white-space: pre-wrap;
+    }
+    .comment-before:hover { background: rgba(106, 153, 85, 0.08); }
+    .comment-inline {
+      color: var(--comment);
+      font-style: italic;
+      font-size: 13px;
+      margin-left: 12px;
+      cursor: pointer;
+      flex-shrink: 1;
+      min-width: 0;
+      white-space: nowrap;
+    }
+    .comment-inline:hover { background: rgba(106, 153, 85, 0.08); }
+
+    .comment-add {
+      opacity: 0;
+      color: var(--text-subtle);
+      cursor: pointer;
+      margin-left: 8px;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .comment-add:hover { color: var(--comment); }
+
+    /* Comment editor */
+    .comment-editor {
+      background: var(--bg-input);
+      border: 1px solid var(--comment);
+      color: var(--comment);
+      font-family: inherit;
+      font-size: 13px;
+      font-style: italic;
+      padding: 2px 6px;
+      border-radius: 3px;
+      outline: none;
+      width: 100%;
+      min-width: 200px;
+      resize: none;
+      line-height: 1.5;
+    }
+
+    /* ── Copy toast ── */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--bg-raised);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+      z-index: 2000;
+    }
+    .toast.show { opacity: 1; }
   </style>
 </head>
 <body>
-  <input id="command" type="text" placeholder="Enter a command (e.g., data.filter(...))" />
-  <div id="hints" style="position: absolute; background: #222; color: #fff; padding: 5px; border: 1px solid #444; display: none;"></div>
-  <div id="editor"></div>
+  <div class="toolbar">
+    <button class="toolbar-btn" id="btn-expand" title="Expand All">Expand All</button>
+    <button class="toolbar-btn" id="btn-collapse" title="Collapse All">Collapse All</button>
+    <div class="toolbar-sep"></div>
+    <button class="toolbar-btn" id="btn-expand-1" title="Expand 1 Level">1</button>
+    <button class="toolbar-btn" id="btn-expand-2" title="Expand 2 Levels">2</button>
+    <button class="toolbar-btn" id="btn-expand-3" title="Expand 3 Levels">3</button>
+    <div class="toolbar-sep"></div>
+    <input class="toolbar-btn" id="search" type="text" placeholder="Search..." style="flex:1;max-width:240px;padding:4px 8px;" />
+  </div>
 
-  <!-- Include JSONEditor JS -->
-  <script src="/assets/jsoneditor.min.js"></script>
+  <div class="command-bar">
+    <span class="command-prompt">&gt;</span>
+    <input id="command" type="text" placeholder="JavaScript expression (e.g. data.filter(...))" autocomplete="off" spellcheck="false" />
+    <div id="hints"></div>
+  </div>
+
+  <div class="error-bar" id="error-bar"></div>
+  <div class="breadcrumb" id="breadcrumb"><span>$</span></div>
+  <div class="tree-container" id="tree-container"></div>
+  <div class="toast" id="toast"></div>
+
   <script>
-    let data = {}; // Placeholder, will be replaced dynamically
+    // ── State ──
+    let data = {};
+    let comments = {};
+    let expandedPaths = new Set();
+    let searchTerm = '';
+    let currentExpression = 'data';
+
+    // ── DOM refs ──
+    const treeContainer = document.getElementById('tree-container');
     const commandInput = document.getElementById('command');
     const hintsContainer = document.getElementById('hints');
-    const editorContainer = document.getElementById('editor');
+    const errorBar = document.getElementById('error-bar');
+    const breadcrumb = document.getElementById('breadcrumb');
+    const searchInput = document.getElementById('search');
+    const toast = document.getElementById('toast');
 
-    // Initialize JSONEditor
-    const editor = new JSONEditor(editorContainer, {
-      mode: 'view', // Restrict editing
-      mainMenuBar: true,
-      navigationBar: true,
-      theme: 'ace/theme/monokai', // Set dark theme
+    // ── Path helpers ──
+    function childPath(parent, key) {
+      if (/^[\w$]+$/u.test(key) && !/^\d/.test(key)) return `${parent}.${key}`;
+      return `${parent}["${key}"]`;
+    }
+    function arrayChildPath(parent, index) {
+      return `${parent}[${index}]`;
+    }
+
+    // ── Comment helpers ──
+    function getNodeComments(path) {
+      return comments[path] || null;
+    }
+    function getKeyComment(path, key, field) {
+      const map = comments[path];
+      if (!map) return null;
+      const entry = map[key];
+      if (!entry) return null;
+      return entry[field] || null;
+    }
+
+    // ── Rendering ──
+    function render() {
+      treeContainer.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      renderValue(frag, data, '$', null, null, 0, false, false);
+      treeContainer.appendChild(frag);
+    }
+
+    function isExpandable(val) {
+      return val !== null && typeof val === 'object';
+    }
+
+    function summarize(val) {
+      if (Array.isArray(val)) return `[${val.length} item${val.length !== 1 ? 's' : ''}]`;
+      const keys = Object.keys(val);
+      return `{${keys.length} key${keys.length !== 1 ? 's' : ''}}`;
+    }
+
+    function matchesSearch(key, val) {
+      if (!searchTerm) return true;
+      const s = searchTerm.toLowerCase();
+      if (key !== null && String(key).toLowerCase().includes(s)) return true;
+      if (val !== null && typeof val !== 'object') {
+        if (String(val).toLowerCase().includes(s)) return true;
+      }
+      return false;
+    }
+
+    function hasSearchMatch(val, key) {
+      if (!searchTerm) return true;
+      if (matchesSearch(key, val)) return true;
+      if (val !== null && typeof val === 'object') {
+        if (Array.isArray(val)) {
+          return val.some((item, i) => hasSearchMatch(item, String(i)));
+        }
+        return Object.entries(val).some(([k, v]) => hasSearchMatch(v, k));
+      }
+      return false;
+    }
+
+    function highlight(text) {
+      if (!searchTerm) return escapeHtml(text);
+      const s = searchTerm.toLowerCase();
+      const idx = text.toLowerCase().indexOf(s);
+      if (idx === -1) return escapeHtml(text);
+      const before = text.slice(0, idx);
+      const match = text.slice(idx, idx + searchTerm.length);
+      const after = text.slice(idx + searchTerm.length);
+      return `${escapeHtml(before)}<mark style="background:#634f00;color:#ffd33d;border-radius:2px">${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function renderValue(container, val, path, key, parentPath, depth, isLast, isArrayItem) {
+      if (searchTerm && !hasSearchMatch(val, key)) return;
+
+      const nodeComments = parentPath !== null ? getNodeComments(parentPath) : getNodeComments(path);
+      const commentKey = key !== null ? key : '#';
+
+      // Before comment
+      if (key !== null && nodeComments && nodeComments[key]?.before) {
+        renderBeforeComment(container, nodeComments[key].before, parentPath, key, depth);
+      }
+      // Container header comment (for root or expanded objects)
+      if (key === null && nodeComments && nodeComments['#']?.before) {
+        renderBeforeComment(container, nodeComments['#'].before, path, '#', depth);
+      }
+
+      if (isExpandable(val)) {
+        renderExpandable(container, val, path, key, parentPath, depth, isLast, isArrayItem, nodeComments);
+      } else {
+        renderPrimitive(container, val, path, key, parentPath, depth, isLast, isArrayItem, nodeComments);
+      }
+    }
+
+    function renderBeforeComment(container, text, objPath, key, depth) {
+      const lines = text.split('\n');
+      for (const line of lines) {
+        const div = document.createElement('div');
+        div.className = 'comment-before';
+        div.style.paddingLeft = `${depth * 20 + 28}px`;
+        div.textContent = `// ${line}`;
+        div.addEventListener('click', (e) => {
+          e.stopPropagation();
+          editComment(div, objPath, key, 'before', text, depth);
+        });
+        container.appendChild(div);
+      }
+    }
+
+    function renderExpandable(container, val, path, key, parentPath, depth, isLast, isArrayItem, nodeComments) {
+      const isArray = Array.isArray(val);
+      const expanded = expandedPaths.has(path);
+      const entries = isArray ? val.map((v, i) => [String(i), v]) : Object.entries(val);
+      const openBracket = isArray ? '[' : '{';
+      const closeBracket = isArray ? ']' : '}';
+
+      // Header line
+      const line = document.createElement('div');
+      line.className = 'tree-line';
+
+      let html = makeIndent(depth);
+      html += `<span class="toggle" data-path="${escapeHtml(path)}">${expanded ? '&#9660;' : '&#9654;'}</span>`;
+
+      if (key !== null && !isArrayItem) {
+        html += `<span class="node-key">${highlight(key)}</span>`;
+        html += `<span class="node-colon">:</span>`;
+      } else if (isArrayItem) {
+        html += `<span class="node-index">${key}:</span>`;
+      }
+
+      if (expanded) {
+        html += `<span class="node-bracket">${openBracket}</span>`;
+      } else {
+        html += `<span class="node-bracket">${openBracket}</span>`;
+        html += `<span class="node-summary">${summarize(val)}</span>`;
+        html += `<span class="node-bracket">${closeBracket}</span>`;
+        if (!isLast) html += `<span class="node-comma">,</span>`;
+      }
+
+      // After comment on the header line
+      const afterCommentKey = key !== null ? key : '#';
+      const afterPath = key !== null ? parentPath : path;
+      const afterComments = key !== null ? nodeComments : getNodeComments(path);
+      if (afterComments && afterComments[afterCommentKey]?.after) {
+        html += `<span class="comment-inline" data-path="${escapeHtml(afterPath)}" data-key="${escapeHtml(afterCommentKey)}" data-field="after">// ${escapeHtml(afterComments[afterCommentKey].after)}</span>`;
+      }
+
+      html += `<span class="comment-add" data-path="${escapeHtml(afterPath || path)}" data-key="${escapeHtml(afterCommentKey)}" data-field="after">+//</span>`;
+
+      line.innerHTML = html;
+      container.appendChild(line);
+
+      // Toggle click
+      line.querySelector('.toggle').addEventListener('click', () => {
+        if (expanded) expandedPaths.delete(path);
+        else expandedPaths.add(path);
+        render();
+      });
+
+      // Comment event handlers
+      bindCommentEvents(line);
+
+      if (expanded) {
+        // Container "#" before comment (inside, at top)
+        const innerComments = getNodeComments(path);
+        if (innerComments && innerComments['#']?.before && key !== null) {
+          renderBeforeComment(container, innerComments['#'].before, path, '#', depth + 1);
+        }
+
+        entries.forEach(([k, v], idx) => {
+          const cp = isArray ? arrayChildPath(path, k) : childPath(path, k);
+          const last = idx === entries.length - 1;
+          renderValue(container, v, cp, k, path, depth + 1, last, isArray);
+        });
+
+        // Container "#" after comment (inside, at bottom)
+        if (innerComments && innerComments['#']?.after) {
+          const div = document.createElement('div');
+          div.className = 'comment-before';
+          div.style.paddingLeft = `${(depth + 1) * 20 + 28}px`;
+          div.textContent = `// ${innerComments['#'].after}`;
+          div.addEventListener('click', (e) => {
+            e.stopPropagation();
+            editComment(div, path, '#', 'after', innerComments['#'].after, depth + 1);
+          });
+          container.appendChild(div);
+        }
+
+        // Closing bracket
+        const closeLine = document.createElement('div');
+        closeLine.className = 'tree-line';
+        let closeHtml = makeIndent(depth);
+        closeHtml += `<span class="toggle-placeholder"></span>`;
+        closeHtml += `<span class="node-bracket">${closeBracket}</span>`;
+        if (!isLast) closeHtml += `<span class="node-comma">,</span>`;
+        closeLine.innerHTML = closeHtml;
+        container.appendChild(closeLine);
+      }
+    }
+
+    function renderPrimitive(container, val, path, key, parentPath, depth, isLast, isArrayItem, nodeComments) {
+      const line = document.createElement('div');
+      line.className = 'tree-line';
+
+      let html = makeIndent(depth);
+      html += `<span class="toggle-placeholder"></span>`;
+
+      if (key !== null && !isArrayItem) {
+        html += `<span class="node-key">${highlight(key)}</span>`;
+        html += `<span class="node-colon">:</span>`;
+      } else if (isArrayItem) {
+        html += `<span class="node-index">${key}:</span>`;
+      }
+
+      html += formatValue(val);
+      if (!isLast) html += `<span class="node-comma">,</span>`;
+
+      // After comment
+      if (key !== null && nodeComments && nodeComments[key]?.after) {
+        html += `<span class="comment-inline" data-path="${escapeHtml(parentPath)}" data-key="${escapeHtml(key)}" data-field="after">// ${escapeHtml(nodeComments[key].after)}</span>`;
+      }
+
+      html += `<span class="comment-add" data-path="${escapeHtml(parentPath || '$')}" data-key="${escapeHtml(key || '#')}" data-field="after">+//</span>`;
+
+      line.innerHTML = html;
+
+      // Copy on double-click of value
+      const valueSpan = line.querySelector('.node-value');
+      if (valueSpan) {
+        valueSpan.style.cursor = 'pointer';
+        valueSpan.addEventListener('dblclick', () => {
+          const text = val === null ? 'null' : String(val);
+          navigator.clipboard.writeText(text).then(() => showToast('Copied!'));
+        });
+      }
+
+      bindCommentEvents(line);
+      container.appendChild(line);
+    }
+
+    function formatValue(val) {
+      if (val === null) return `<span class="node-value null">null</span>`;
+      if (typeof val === 'string') return `<span class="node-value string">"${highlight(val)}"</span>`;
+      if (typeof val === 'number') return `<span class="node-value number">${highlight(String(val))}</span>`;
+      if (typeof val === 'boolean') return `<span class="node-value boolean">${val}</span>`;
+      return `<span class="node-value">${escapeHtml(String(val))}</span>`;
+    }
+
+    function makeIndent(depth) {
+      let s = '';
+      for (let i = 0; i < depth; i++) s += '<span class="indent"></span>';
+      return s;
+    }
+
+    // ── Comment editing ──
+    function bindCommentEvents(line) {
+      line.querySelectorAll('.comment-inline').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const path = el.getAttribute('data-path');
+          const key = el.getAttribute('data-key');
+          const field = el.getAttribute('data-field');
+          const text = el.textContent.replace(/^\/\/\s*/, '');
+          editInlineComment(el, path, key, field, text);
+        });
+      });
+      line.querySelectorAll('.comment-add').forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const path = el.getAttribute('data-path');
+          const key = el.getAttribute('data-key');
+          const field = el.getAttribute('data-field');
+          editInlineComment(el, path, key, field, '');
+        });
+      });
+    }
+
+    function editComment(el, objPath, key, field, text, depth) {
+      const textarea = document.createElement('textarea');
+      textarea.className = 'comment-editor';
+      textarea.value = text;
+      textarea.rows = text.split('\n').length;
+      textarea.style.marginLeft = `${depth * 20 + 28}px`;
+
+      // Replace all before comment lines for this key
+      const parent = el.parentElement;
+      let next = el.nextElementSibling;
+      while (next && next.classList.contains('comment-before') && next.getAttribute('data-key') === key) {
+        const toRemove = next;
+        next = next.nextElementSibling;
+        toRemove.remove();
+      }
+
+      el.replaceWith(textarea);
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+
+      function finish() {
+        const newText = textarea.value.trim();
+        saveComment(objPath, key, field, newText || null);
+      }
+
+      textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finish(); }
+        if (e.key === 'Escape') { render(); }
+      });
+      textarea.addEventListener('blur', finish);
+    }
+
+    function editInlineComment(el, objPath, key, field, text) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'comment-editor';
+      input.value = text;
+      input.style.width = Math.max(200, text.length * 8) + 'px';
+      input.style.display = 'inline-block';
+      input.style.marginLeft = '12px';
+
+      el.replaceWith(input);
+      input.focus();
+
+      function finish() {
+        const newText = input.value.trim();
+        saveComment(objPath, key, field, newText || null);
+      }
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); finish(); }
+        if (e.key === 'Escape') { render(); }
+      });
+      input.addEventListener('blur', finish);
+    }
+
+    async function saveComment(path, key, field, text) {
+      try {
+        const resp = await fetch('/comments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path, key, field, text }),
+        });
+        const result = await resp.json();
+        if (resp.ok && result.comments) {
+          comments = result.comments;
+        }
+      } catch (err) {
+        console.error('Failed to save comment:', err);
+      }
+      render();
+    }
+
+    // ── Expand/Collapse helpers ──
+    function collectPaths(val, path, depth, maxDepth) {
+      if (val === null || typeof val !== 'object') return;
+      if (maxDepth !== undefined && depth >= maxDepth) return;
+      expandedPaths.add(path);
+      if (Array.isArray(val)) {
+        val.forEach((item, i) => collectPaths(item, arrayChildPath(path, i), depth + 1, maxDepth));
+      } else {
+        Object.entries(val).forEach(([k, v]) => collectPaths(v, childPath(path, k), depth + 1, maxDepth));
+      }
+    }
+
+    document.getElementById('btn-expand').addEventListener('click', () => {
+      expandedPaths.clear();
+      collectPaths(data, '$', 0);
+      render();
+    });
+    document.getElementById('btn-collapse').addEventListener('click', () => {
+      expandedPaths.clear();
+      render();
+    });
+    document.getElementById('btn-expand-1').addEventListener('click', () => {
+      expandedPaths.clear();
+      collectPaths(data, '$', 0, 1);
+      render();
+    });
+    document.getElementById('btn-expand-2').addEventListener('click', () => {
+      expandedPaths.clear();
+      collectPaths(data, '$', 0, 2);
+      render();
+    });
+    document.getElementById('btn-expand-3').addEventListener('click', () => {
+      expandedPaths.clear();
+      collectPaths(data, '$', 0, 3);
+      render();
     });
 
-    // Render the initial data
-    editor.set(data);
+    // ── Search ──
+    let searchTimeout;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        searchTerm = searchInput.value.trim();
+        if (searchTerm) {
+          // Expand all to show matches
+          expandedPaths.clear();
+          collectPaths(data, '$', 0);
+        }
+        render();
+      }, 200);
+    });
 
-    // Autocomplete logic
+    // ── Command input ──
     let autocompleteIndex = -1;
     let autocompleteSuggestions = [];
 
     async function fetchAutocomplete(input) {
       try {
-        const response = await fetch('/autocomplete', {
+        const resp = await fetch('/autocomplete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ input }),
         });
-        const result = await response.json();
+        const result = await resp.json();
         return result.completions || [];
-      } catch (error) {
-        console.error('Autocomplete error:', error);
-        return [];
-      }
+      } catch { return []; }
     }
 
     function updateHints() {
@@ -96,147 +731,123 @@
         hintsContainer.style.display = 'none';
         return;
       }
-
       const input = commandInput.value;
-      const cursorPosition = commandInput.selectionStart; // Get the current cursor position
-
-      // Calculate the last expression based on the first suggestion length
-      const lastExpression = input.substring(
-        cursorPosition - autocompleteSuggestions[0].length,
-        cursorPosition
-      );
-
-      // Hide the suggestion box if there's only one suggestion and it fully matches the last part of the command
-      if (
-        autocompleteSuggestions.length === 1 &&
-        autocompleteSuggestions[0] === lastExpression
-      ) {
+      const cursor = commandInput.selectionStart;
+      const tail = input.substring(cursor - autocompleteSuggestions[0].length, cursor);
+      if (autocompleteSuggestions.length === 1 && autocompleteSuggestions[0] === tail) {
         hintsContainer.style.display = 'none';
         return;
       }
-
-      // Position the hints container below the input field
-      const inputRect = commandInput.getBoundingClientRect();
-      hintsContainer.style.top = `${inputRect.bottom + window.scrollY}px`;
-      hintsContainer.style.left = `${inputRect.left + window.scrollX}px`;
-      hintsContainer.style.width = `${inputRect.width}px`;
-
-      // Populate the hints container
-      hintsContainer.innerHTML = autocompleteSuggestions
-        .map((suggestion, index) => {
-          const isSelected = index === autocompleteIndex;
-          return `<div 
-                    class="hint-item" 
-                    data-index="${index}" 
-                    style="padding: 2px; background: ${isSelected ? '#444' : 'transparent'}; cursor: pointer;">
-                    ${suggestion}
-                  </div>`;
-        })
-        .join('');
+      hintsContainer.innerHTML = autocompleteSuggestions.map((s, i) =>
+        `<div class="hint-item${i === autocompleteIndex ? ' selected' : ''}" data-index="${i}">${escapeHtml(s)}</div>`
+      ).join('');
       hintsContainer.style.display = 'block';
 
-      // Add click event listeners to suggestions
-      document.querySelectorAll('.hint-item').forEach((item) => {
-        item.addEventListener('click', (event) => {
-          autocompleteIndex = parseInt(event.target.getAttribute('data-index'), 10);
-          updateInputWithSuggestion();
-
-          // Close the suggestion box and return focus to the input field
+      hintsContainer.querySelectorAll('.hint-item').forEach(item => {
+        item.addEventListener('click', () => {
+          autocompleteIndex = parseInt(item.getAttribute('data-index'));
+          applySuggestion();
           hintsContainer.style.display = 'none';
           commandInput.focus();
         });
       });
     }
 
-    commandInput.addEventListener('input', async () => {
+    function applySuggestion() {
       const input = commandInput.value;
-      autocompleteSuggestions = await fetchAutocomplete(input); // Pass the full command string
+      const cursor = commandInput.selectionStart;
+      const dotIdx = input.lastIndexOf('.', cursor - 1);
+      const prefix = dotIdx !== -1 ? input.slice(0, dotIdx + 1) : '';
+      const suggestion = autocompleteSuggestions[autocompleteIndex];
+      commandInput.value = prefix + suggestion;
+      const pos = commandInput.value.length;
+      commandInput.setSelectionRange(pos, pos);
+      hintsContainer.style.display = 'none';
+    }
+
+    commandInput.addEventListener('input', async () => {
+      autocompleteSuggestions = await fetchAutocomplete(commandInput.value);
       autocompleteIndex = -1;
       updateHints();
     });
 
-    commandInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Tab') {
-        event.preventDefault();
-
+    commandInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
         if (autocompleteSuggestions.length > 0) {
-          if (event.shiftKey) {
-            // Cycle backward through suggestions on Shift+Tab
-            autocompleteIndex =
-              (autocompleteIndex - 1 + autocompleteSuggestions.length) % autocompleteSuggestions.length;
-          } else {
-            // Cycle forward through suggestions on Tab
-            autocompleteIndex = (autocompleteIndex + 1) % autocompleteSuggestions.length;
-          }
-
-          // Update the input field with the current suggestion
-          updateInputWithSuggestion();
-
-          // Update the hints display
+          autocompleteIndex = e.shiftKey
+            ? (autocompleteIndex - 1 + autocompleteSuggestions.length) % autocompleteSuggestions.length
+            : (autocompleteIndex + 1) % autocompleteSuggestions.length;
+          applySuggestion();
           updateHints();
         }
       }
     });
 
-    function updateInputWithSuggestion() {
-      const input = commandInput.value;
-      const cursorPosition = commandInput.selectionStart; // Get the cursor position
-
-      // Find the position of the last dot before the cursor
-      const lastDotIndex = input.lastIndexOf('.', cursorPosition - 1);
-
-      let prefix = '';
-      if (lastDotIndex !== -1) {
-        // Preserve everything before the last dot
-        prefix = input.slice(0, lastDotIndex + 1);
-      }
-
-      // Get the selected suggestion
-      const suggestion = autocompleteSuggestions[autocompleteIndex];
-
-      // Update the input field with the prefix + suggestion
-      commandInput.value = prefix + suggestion;
-
-      // Move the cursor to the end of the inserted suggestion
-      const newCursorPosition = (prefix + suggestion).length;
-      commandInput.setSelectionRange(newCursorPosition, newCursorPosition);
-
-      // Hide hints after applying a suggestion
-      hintsContainer.style.display = 'none';
-    }
-
-    // Handle command input
-    commandInput.addEventListener('keypress', async (event) => {
-      if (event.key === 'Enter') {
+    commandInput.addEventListener('keypress', async (e) => {
+      if (e.key === 'Enter') {
+        hintsContainer.style.display = 'none';
+        const cmd = commandInput.value.trim();
+        if (!cmd) return;
+        currentExpression = cmd;
         try {
-          const command = commandInput.value;
-          const response = await fetch('/execute', {
+          const resp = await fetch('/execute', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ command }),
+            body: JSON.stringify({ command: cmd }),
           });
-          const result = await response.json();
-          if (response.ok) {
-            editor.set(result.result);
-            editor.expandAll(); // Expand all nodes in the JSON tree
+          const result = await resp.json();
+          if (resp.ok) {
+            data = result.result;
+            comments = result.comments || {};
+            errorBar.classList.remove('visible');
+            expandedPaths.clear();
+            // Auto-expand first level
+            collectPaths(data, '$', 0, 2);
+            updateBreadcrumb();
+            render();
           } else {
-            alert(`❌ Error: ${result.error}`);
+            showError(result.error || 'Unknown error');
           }
-        } catch (error) {
-          alert(`❌ Error: ${error.message}`);
+        } catch (err) {
+          showError(err.message);
         }
-
-        // Hide the suggestion box after submitting the command
-        hintsContainer.style.display = 'none';
       }
     });
 
-    document.addEventListener('DOMContentLoaded', () => {
-      // Set the default text to 'data'
-      commandInput.value = 'data';
+    // ── Breadcrumb ──
+    function updateBreadcrumb() {
+      breadcrumb.innerHTML = `<span class="crumb" data-expr="data">$</span>`;
+      // Parse expression into segments for breadcrumb
+      const expr = currentExpression;
+      if (expr === 'data') return;
+      const rest = expr.startsWith('data') ? expr.slice(4) : '';
+      if (rest) {
+        breadcrumb.innerHTML += `<span> &rsaquo; </span><span class="crumb">${escapeHtml(rest)}</span>`;
+      }
+    }
 
-      // Set focus to the command input box
+    // ── Error display ──
+    function showError(msg) {
+      errorBar.textContent = msg;
+      errorBar.classList.add('visible');
+    }
+
+    // ── Toast ──
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 1500);
+    }
+
+    // ── Init ──
+    document.addEventListener('DOMContentLoaded', () => {
+      commandInput.value = 'data';
       commandInput.focus();
+      // Auto-expand first 2 levels
+      collectPaths(data, '$', 0, 2);
+      updateBreadcrumb();
+      render();
     });
   </script>
 </body>

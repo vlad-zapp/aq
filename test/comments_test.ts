@@ -1,4 +1,5 @@
 import {
+  assert,
   assertEquals,
   assertExists,
   assertNotEquals,
@@ -840,6 +841,164 @@ Deno.test("YAML: anchors file comments are preserved", async () => {
 });
 
 // ============================================================
+// YAML Anchor/Alias Preservation Tests
+// ============================================================
+
+Deno.test("YAML: scalar anchor is preserved in YAML output", () => {
+  const input = `
+images:
+  common:
+    alpine: &alpine registry.example.com/alpine@sha256:abc123
+  services:
+    init: *alpine
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  assert(output.includes("&alpine"), "anchor &alpine should be present");
+  assert(output.includes("*alpine"), "alias *alpine should be present");
+});
+
+Deno.test("YAML: object anchor is preserved in YAML output", () => {
+  const input = `
+chart_refs:
+  ingress-nginx: &ingress_chart
+    location: https://example.com/charts/ingress.tgz
+    subpath: ingress-nginx
+    type: tar
+charts:
+  kubernetes:
+    ingress: *ingress_chart
+  monitoring:
+    ingress: *ingress_chart
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  assert(output.includes("&ingress_chart"), "anchor &ingress_chart should be present");
+  // Two alias references
+  const aliasMatches = output.match(/\*ingress_chart/g);
+  assertEquals(aliasMatches?.length, 2, "should have 2 alias references");
+});
+
+Deno.test("YAML: multiple anchors and aliases are all preserved", () => {
+  const input = `
+defs:
+  foo: &foo value_foo
+  bar: &bar value_bar
+  baz: &baz value_baz
+uses:
+  a: *foo
+  b: *bar
+  c: *baz
+  d: *foo
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  assert(output.includes("&foo"), "anchor &foo should be present");
+  assert(output.includes("&bar"), "anchor &bar should be present");
+  assert(output.includes("&baz"), "anchor &baz should be present");
+  assertEquals(output.match(/\*foo/g)?.length, 2, "should have 2 *foo aliases");
+  assertEquals(output.match(/\*bar/g)?.length, 1, "should have 1 *bar alias");
+  assertEquals(output.match(/\*baz/g)?.length, 1, "should have 1 *baz alias");
+});
+
+Deno.test("YAML: anchor values are correct after decode", () => {
+  const input = `
+defs:
+  img: &img registry.example.com/app@sha256:abc
+refs:
+  service_a: *img
+  service_b: *img
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const refs = (doc as any).refs;
+
+  assertEquals(refs.service_a, "registry.example.com/app@sha256:abc");
+  assertEquals(refs.service_b, "registry.example.com/app@sha256:abc");
+});
+
+Deno.test("YAML: anchor round-trip preserves data integrity", () => {
+  const input = `
+defs:
+  chart: &chart
+    location: https://example.com/chart.tgz
+    subpath: myapp
+    type: tar
+uses:
+  first: *chart
+  second: *chart
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  // Re-parse output and verify data
+  const reparsed = YamlPlugin.decode(output);
+  const redoc = reparsed.documents[0] as Record<string, unknown>;
+
+  assertEquals((redoc as any).uses.first.location, "https://example.com/chart.tgz");
+  assertEquals((redoc as any).uses.second.subpath, "myapp");
+});
+
+Deno.test("YAML: anchors with comments are both preserved", () => {
+  const input = `
+# Header
+defs:
+  # The main image
+  img: &img registry.example.com/app@sha256:abc
+refs:
+  service: *img
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  // Both anchors and comments should survive
+  assert(output.includes("&img"), "anchor should be preserved");
+  assert(output.includes("*img"), "alias should be preserved");
+  assert(output.includes("# Header"), "header comment should be preserved");
+  assert(output.includes("# The main image"), "key comment should be preserved");
+});
+
+Deno.test("YAML: anchors file preserves all anchors and aliases on round-trip", async () => {
+  const input = await Deno.readTextFile("test/data/anchors.yaml");
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  // Count anchors and aliases in output
+  const anchors = output.match(/&\w+/g) || [];
+  const aliases = output.match(/\*\w+/g) || [];
+
+  // The fixture has 12 anchors and many aliases
+  assert(anchors.length >= 12, `expected at least 12 anchors, got ${anchors.length}`);
+  assert(aliases.length >= 20, `expected at least 20 aliases, got ${aliases.length}`);
+});
+
+Deno.test("YAML: YAML without anchors is unaffected", () => {
+  const input = `
+name: test
+version: 1
+tags:
+  - alpha
+  - beta
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  assert(!output.includes("&"), "no anchors should appear");
+  assert(!output.includes("*"), "no aliases should appear");
+  assert(output.includes("name: test"), "data should be intact");
+});
+
+// ============================================================
 // YAML Document Separator (---/...) Tests
 // ============================================================
 
@@ -1128,4 +1287,295 @@ Deno.test("tracked: round-trip with YAML encode preserves set comments", () => {
   assertEquals(output.includes("# Person record"), true);
   assertEquals(output.includes("# first name"), true);
   assertEquals(output.includes("# Age in years"), true);
+});
+
+// ============================================================
+// Tracked Proxy .anchor() / .alias() Tests
+// ============================================================
+
+Deno.test("tracked: .anchor() reads existing anchor name from YAML", () => {
+  const input = `
+defs:
+  img: &my_anchor registry.example.com/app
+refs:
+  svc: *my_anchor
+`;
+  const parsed = YamlPlugin.decode(input);
+  const raw = parsed.documents[0] as Record<string, unknown>;
+  const data = tracked(raw) as any;
+
+  assertEquals(data.defs.img.anchor(), "my_anchor");
+});
+
+Deno.test("tracked: .alias() reads existing alias reference from YAML", () => {
+  const input = `
+defs:
+  img: &my_anchor registry.example.com/app
+refs:
+  svc: *my_anchor
+`;
+  const parsed = YamlPlugin.decode(input);
+  const raw = parsed.documents[0] as Record<string, unknown>;
+  const data = tracked(raw) as any;
+
+  assertEquals(data.refs.svc.alias(), "my_anchor");
+});
+
+Deno.test("tracked: .anchor() returns undefined when no anchor", () => {
+  const input = "name: John\nage: 30\n";
+  const parsed = YamlPlugin.decode(input);
+  const raw = parsed.documents[0] as Record<string, unknown>;
+  const data = tracked(raw) as any;
+
+  assertEquals(data.name.anchor(), undefined);
+  assertEquals(data.age.anchor(), undefined);
+});
+
+Deno.test("tracked: .alias() returns undefined when not an alias", () => {
+  const input = `
+defs:
+  img: &my_anchor registry.example.com/app
+`;
+  const parsed = YamlPlugin.decode(input);
+  const raw = parsed.documents[0] as Record<string, unknown>;
+  const data = tracked(raw) as any;
+
+  assertEquals(data.defs.img.alias(), undefined);
+});
+
+Deno.test("tracked: .anchor(name) sets anchor on a value", () => {
+  const raw = { defs: { img: "registry.example.com/app" }, refs: { svc: "registry.example.com/app" } };
+  const data = tracked(raw) as any;
+
+  data.defs.img.anchor("my_img");
+  assertEquals(data.defs.img.anchor(), "my_img");
+
+  const output = YamlPlugin.encode(raw) as string;
+  assert(output.includes("&my_img"));
+});
+
+Deno.test("tracked: .alias(name) sets alias on a value", () => {
+  const raw = { defs: { img: "registry.example.com/app" }, refs: { svc: "registry.example.com/app" } };
+  const data = tracked(raw) as any;
+
+  data.defs.img.anchor("my_img");
+  data.refs.svc.alias("my_img");
+
+  assertEquals(data.refs.svc.alias(), "my_img");
+
+  const output = YamlPlugin.encode(raw) as string;
+  assert(output.includes("&my_img"));
+  assert(output.includes("*my_img"));
+});
+
+Deno.test("tracked: .anchor() on object value reads anchor", () => {
+  const input = `
+chart_refs:
+  nginx: &nginx_chart
+    location: https://example.com/nginx.tgz
+    type: tar
+charts:
+  web: *nginx_chart
+`;
+  const parsed = YamlPlugin.decode(input);
+  const raw = parsed.documents[0] as Record<string, unknown>;
+  const data = tracked(raw) as any;
+
+  assertEquals(data.chart_refs.nginx.anchor(), "nginx_chart");
+  assertEquals(data.charts.web.alias(), "nginx_chart");
+});
+
+Deno.test("tracked: setting anchor clears alias and vice versa", () => {
+  const raw = { a: "val" };
+  const data = tracked(raw) as any;
+
+  data.a.anchor("x");
+  assertEquals(data.a.anchor(), "x");
+  assertEquals(data.a.alias(), undefined);
+
+  data.a.alias("y");
+  assertEquals(data.a.alias(), "y");
+  assertEquals(data.a.anchor(), undefined);
+});
+
+Deno.test("tracked: .anchor() and .alias() work on primitive number", () => {
+  const raw = { port: 8080 };
+  const data = tracked(raw) as any;
+
+  data.port.anchor("default_port");
+  assertEquals(data.port.anchor(), "default_port");
+});
+
+Deno.test("tracked: aqAnchors() returns full anchor map", () => {
+  const input = `
+defs:
+  a: &anchor_a value_a
+  b: &anchor_b value_b
+refs:
+  x: *anchor_a
+  y: *anchor_b
+`;
+  const parsed = YamlPlugin.decode(input);
+  const raw = parsed.documents[0] as Record<string, unknown>;
+  const data = tracked(raw) as any;
+
+  const defs = data.defs.aqAnchors();
+  assertExists(defs);
+  assertEquals(defs.a.anchor, "anchor_a");
+  assertEquals(defs.b.anchor, "anchor_b");
+
+  const refs = data.refs.aqAnchors();
+  assertExists(refs);
+  assertEquals(refs.x.alias, "anchor_a");
+  assertEquals(refs.y.alias, "anchor_b");
+});
+
+Deno.test("tracked: aqAnchors(key) returns single entry", () => {
+  const input = `
+defs:
+  img: &my_img value
+`;
+  const parsed = YamlPlugin.decode(input);
+  const raw = parsed.documents[0] as Record<string, unknown>;
+  const data = tracked(raw) as any;
+
+  const entry = data.defs.aqAnchors("img");
+  assertExists(entry);
+  assertEquals(entry.anchor, "my_img");
+});
+
+Deno.test("tracked: round-trip YAML preserves anchors set via .anchor()/.alias()", () => {
+  const raw = {
+    defs: { img: "registry.example.com/app@sha256:abc" },
+    services: { web: "registry.example.com/app@sha256:abc", api: "registry.example.com/app@sha256:abc" },
+  };
+  const data = tracked(raw) as any;
+
+  data.defs.img.anchor("app_img");
+  data.services.web.alias("app_img");
+  data.services.api.alias("app_img");
+
+  const output = YamlPlugin.encode(raw) as string;
+  assert(output.includes("&app_img"), "anchor should appear");
+  assertEquals(output.match(/\*app_img/g)?.length, 2, "should have 2 aliases");
+
+  // Re-parse and verify data is still correct
+  const reparsed = YamlPlugin.decode(output);
+  const redoc = reparsed.documents[0] as Record<string, unknown>;
+  assertEquals((redoc as any).services.web, "registry.example.com/app@sha256:abc");
+  assertEquals((redoc as any).services.api, "registry.example.com/app@sha256:abc");
+});
+
+// ============================================================
+// YAML Deep Nesting Comment Round-trip Tests
+// ============================================================
+
+Deno.test("YAML: deeply nested comments survive round-trip", () => {
+  const input = `root:
+  level1:
+    # comment on deep key
+    deep_key: deep_value
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  assert(output.includes("# comment on deep key"), "deep comment should survive");
+});
+
+Deno.test("YAML: comments on multiple nesting levels survive round-trip", () => {
+  const input = `# header
+root:
+  # level 1 comment
+  child:
+    # level 2 comment
+    key: value
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  assert(output.includes("# header"), "header comment should survive");
+  assert(output.includes("# level 1 comment"), "level 1 comment should survive");
+  assert(output.includes("# level 2 comment"), "level 2 comment should survive");
+});
+
+Deno.test("YAML: parent without comments does not block child comment extraction", () => {
+  // The root and 'wrapper' have no comments, but 'inner' does
+  const input = `wrapper:
+  inner:
+    # important note
+    key: value
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+
+  const inner = (doc as any).wrapper.inner;
+  const comment = getComment(inner, "key");
+  assertExists(comment, "comment on deeply nested key should be extracted");
+  assertEquals(comment!.before, "important note");
+
+  // Round-trip: comment should appear in output
+  const output = YamlPlugin.encode(doc) as string;
+  assert(output.includes("# important note"), "deep comment should survive round-trip");
+});
+
+Deno.test("YAML: trailing comment on nested map is preserved", () => {
+  const input = `outer:
+  inner:
+    a: 1
+    b: 2
+    # trailing note
+  next_key: value
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+
+  // The trailing comment should be stored on inner object as "#" after
+  const inner = (doc as any).outer.inner;
+  const containerComment = getComment(inner, "#");
+  assertExists(containerComment, "trailing comment should be captured");
+  assertEquals(containerComment!.after, "trailing note");
+
+  // Round-trip
+  const output = YamlPlugin.encode(doc) as string;
+  assert(output.includes("# trailing note"), "trailing comment should survive round-trip");
+});
+
+Deno.test("YAML: empty comment line is preserved in round-trip", () => {
+  const input = `items:
+  # section header
+  #
+  first: value1
+  # next item
+  second: value2
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+
+  // The comment on 'first' should include both lines (header + empty)
+  const items = (doc as any).items;
+  const firstComment = getComment(items, "first");
+  assertExists(firstComment);
+  // The empty # line is preserved as an empty line in the comment text
+  assert(firstComment!.before!.includes("section header"), "should have section header");
+  assert(firstComment!.before!.includes("\n"), "should have newline for empty comment line");
+
+  // Round-trip: both comment lines should appear
+  const output = YamlPlugin.encode(doc) as string;
+  assert(output.includes("# section header"), "section header should survive");
+});
+
+Deno.test("YAML: inline (after) comments on deeply nested scalars survive", () => {
+  const input = `config:
+  database:
+    host: localhost # primary host
+    port: 5432 # default port
+`;
+  const parsed = YamlPlugin.decode(input);
+  const doc = parsed.documents[0] as Record<string, unknown>;
+  const output = YamlPlugin.encode(doc) as string;
+
+  assert(output.includes("# primary host"), "inline comment on host should survive");
+  assert(output.includes("# default port"), "inline comment on port should survive");
 });

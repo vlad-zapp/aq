@@ -13,16 +13,14 @@ async function main() {
   let folder = "./src/webui";
   promises.push(embedFile(folder, "index.html"));
 
-  for await (const entry of Deno.readDir(folder + "/assets")) {
-    if (entry.isFile) {
-      promises.push(embedFile(folder, `assets/${entry.name}`));
+  try {
+    for await (const entry of Deno.readDir(folder + "/assets")) {
+      if (entry.isFile) {
+        promises.push(embedFile(folder, `assets/${entry.name}`));
+      }
     }
-  }
-
-  for await (const entry of Deno.readDir(folder + "/assets/img")) {
-    if (entry.isFile) {
-      promises.push(embedFile(folder, `assets/img/${entry.name}`));
-    }
+  } catch {
+    // No assets directory - that's fine
   }
 
   // Wait for all embedFile calls to complete
