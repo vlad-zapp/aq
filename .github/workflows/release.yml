@@ -57,8 +57,13 @@ jobs:
       - name: Build standalone binaries
         run: npx @yao-pkg/pkg dist/src/main.js --targets node20-linux-x64,node20-macos-x64,node20-macos-arm64,node20-win-x64 --output release/aq
 
-      - name: Rename Windows binary
-        run: mv release/aq-win-x64.exe release/aq-windows-x64.exe
+      - name: Package binaries
+        run: |
+          cd release
+          mv aq-linux-x64 aq && tar czf aq-linux-x64.tar.gz aq && rm aq
+          mv aq-macos-x64 aq && tar czf aq-macos-x64.tar.gz aq && rm aq
+          mv aq-macos-arm64 aq && tar czf aq-macos-arm64.tar.gz aq && rm aq
+          mv aq-win-x64.exe aq.exe && zip aq-windows-x64.zip aq.exe && rm aq.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -67,21 +72,21 @@ jobs:
             Release ${{ github.ref_name }}
 
             ### Download
-            | Platform | Binary |
-            |----------|--------|
-            | Linux x64 | `aq-linux-x64` |
-            | macOS x64 | `aq-macos-x64` |
-            | macOS ARM64 | `aq-macos-arm64` |
-            | Windows x64 | `aq-windows-x64.exe` |
+            | Platform | Archive |
+            |----------|---------|
+            | Linux x64 | `aq-linux-x64.tar.gz` |
+            | macOS x64 | `aq-macos-x64.tar.gz` |
+            | macOS ARM64 | `aq-macos-arm64.tar.gz` |
+            | Windows x64 | `aq-windows-x64.zip` |
 
             ### Install
-            Download the binary for your platform, make it executable (`chmod +x aq-*`), and place it in your PATH.
+            Extract the archive, then place the `aq` binary in your PATH.
 
             Or install via npm: `npm install -g aq`
           draft: false
           prerelease: false
           files: |
-            release/aq-linux-x64
-            release/aq-macos-x64
-            release/aq-macos-arm64
-            release/aq-windows-x64.exe
+            release/aq-linux-x64.tar.gz
+            release/aq-macos-x64.tar.gz
+            release/aq-macos-arm64.tar.gz
+            release/aq-windows-x64.zip
