@@ -54,10 +54,25 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Package release artifact
+        run: |
+          mkdir -p aq-${{ github.ref_name }}
+          cp -r dist package.json node_modules aq-${{ github.ref_name }}/
+          tar czf aq-${{ github.ref_name }}.tar.gz aq-${{ github.ref_name }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           body: |
             Release ${{ github.ref_name }}
+
+            ### Usage
+            Download and extract, then run:
+            ```bash
+            node aq-${{ github.ref_name }}/dist/src/main.js [file] [options]
+            ```
+            Or install globally from npm: `npm install -g aq`
           draft: false
           prerelease: false
+          files: |
+            aq-${{ github.ref_name }}.tar.gz
