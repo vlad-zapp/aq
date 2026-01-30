@@ -13,19 +13,17 @@
 - YAML anchor/alias preservation
 - Seamless integration with Unix pipelines
 - Library API for use in Node.js projects
-- Built with Node.js — works on any platform
+- Standalone binaries — no runtime required
 
 ---
 
 ## Installation
 
-### Option 1: Install from npm (as a CLI tool)
+### Download a binary
 
-```bash
-npm install -g aq
-```
+Grab the latest release for your platform from [GitHub Releases](https://github.com/vlad-zapp/aq/releases).
 
-### Option 2: Clone and build
+### Build from source
 
 ```bash
 git clone https://github.com/vlad-zapp/aq.git
@@ -36,7 +34,7 @@ npm run build
 
 The compiled output is in `dist/`. Run with `node dist/src/main.js`.
 
-### Option 3: Use as a library
+### Use as a library
 
 Add to your `package.json`:
 
