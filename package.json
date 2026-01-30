@@ -10,6 +10,7 @@
   "scripts": {
     "embed-assets": "node scripts/embed-assets.mjs",
     "build": "npm run embed-assets && tsc",
+    "prepare": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
