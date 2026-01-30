@@ -1,13 +1,14 @@
-import { serve } from "https://deno.land/std/http/server.ts";
-import { autocomplete, evaluateCommand } from "../replHelpers.ts";
-import { getErrorMessage } from "../utils.ts";
+import * as http from "node:http";
+import { exec } from "node:child_process";
+import { autocomplete, evaluateCommand } from "../replHelpers";
+import { getErrorMessage } from "../utils";
 import {
   getComments,
   hasComments,
   setComment,
   type CommentMap,
-} from "../infrastructure/comments.ts";
-import { files } from "./embedded.ts";
+} from "../infrastructure/comments";
+import { files } from "./embedded";
 
 const PORT = 8765;
 
@@ -69,6 +70,20 @@ function resolveJsonPath(root: unknown, path: string): unknown {
   return current;
 }
 
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+    req.on("error", reject);
+  });
+}
+
+function sendJson(res: http.ServerResponse, data: unknown, status: number = 200): void {
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(data));
+}
+
 export async function startWebServer(data: unknown) {
   (globalThis as any).data = data;
 
@@ -101,59 +116,43 @@ export async function startWebServer(data: unknown) {
     `let comments = ${jsonComments};`,
   );
 
-  serve(async (req) => {
-    const url = new URL(req.url);
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url!, `http://localhost:${PORT}`);
 
     if (url.pathname === "/execute" && req.method === "POST") {
       try {
-        const body = await req.json();
+        const body = JSON.parse(await readBody(req));
         const command = body.command;
         const result = evaluateCommand(command, data);
         const resultComments = extractAllComments(result);
-        return new Response(
-          JSON.stringify({ result, comments: resultComments }),
-          { headers: { "Content-Type": "application/json" } },
-        );
+        sendJson(res, { result, comments: resultComments });
       } catch (error) {
-        return new Response(
-          JSON.stringify({ error: getErrorMessage(error) }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        );
+        sendJson(res, { error: getErrorMessage(error) }, 400);
       }
+      return;
     }
 
     if (url.pathname === "/autocomplete" && req.method === "POST") {
       try {
-        const body = await req.json();
+        const body = JSON.parse(await readBody(req));
         const input = body.input;
         const completions = autocomplete(input);
-        return new Response(
-          JSON.stringify({ completions }),
-          { headers: { "Content-Type": "application/json" } },
-        );
+        sendJson(res, { completions });
       } catch (error) {
-        return new Response(
-          JSON.stringify({ error: getErrorMessage(error) }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        );
+        sendJson(res, { error: getErrorMessage(error) }, 400);
       }
+      return;
     }
 
     // Set or remove a comment on a specific path+key
     if (url.pathname === "/comments" && req.method === "POST") {
       try {
-        const body = await req.json();
+        const body = JSON.parse(await readBody(req));
         const { path, key, field, text } = body;
-        // path = JSON path to the parent object, e.g. "$" or "$.metadata"
-        // key = the key within that object, e.g. "name" or "#"
-        // field = "before" or "after"
-        // text = comment text or null to remove
         const target = resolveJsonPath(data, path);
         if (target === null || target === undefined || typeof target !== "object") {
-          return new Response(
-            JSON.stringify({ error: "Target path not found" }),
-            { status: 400, headers: { "Content-Type": "application/json" } },
-          );
+          sendJson(res, { error: "Target path not found" }, 400);
+          return;
         }
         const existing = getComments(target)?.[key] ?? {};
         if (text) {
@@ -172,49 +171,48 @@ export async function startWebServer(data: unknown) {
         }
         // Return updated comments for the whole tree
         const allComments = extractAllComments(data);
-        return new Response(
-          JSON.stringify({ comments: allComments }),
-          { headers: { "Content-Type": "application/json" } },
-        );
+        sendJson(res, { comments: allComments });
       } catch (error) {
-        return new Response(
-          JSON.stringify({ error: getErrorMessage(error) }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        );
+        sendJson(res, { error: getErrorMessage(error) }, 400);
       }
+      return;
     }
 
     if (url.pathname.startsWith("/assets/")) {
       const assetContent = files[url.pathname];
       if (assetContent) {
         const contentType = getMimeType(url.pathname);
-        return new Response(assetContent, {
-          headers: { "Content-Type": contentType },
-        });
+        res.writeHead(200, { "Content-Type": contentType });
+        res.end(assetContent);
+        return;
       }
     }
 
     if (
       url.pathname === "/" || url.pathname === "/index.html" || !url.pathname
     ) {
-      return new Response(html, {
-        headers: { "Content-Type": "text/html" },
-      });
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(html);
+      return;
     }
 
-    return new Response("File not found", { status: 404 });
-  }, { port: PORT });
-
-  console.log(`🌐 Web server started at http://localhost:${PORT}`);
-  const openCommand = Deno.build.os === "windows"
-    ? "start"
-    : Deno.build.os === "darwin"
-    ? "open"
-    : "xdg-open";
-  const command = new Deno.Command(openCommand, {
-    args: [`http://localhost:${PORT}`],
+    res.writeHead(404);
+    res.end("File not found");
   });
-  await command.output();
+
+  server.listen(PORT, () => {
+    console.log(`🌐 Web server started at http://localhost:${PORT}`);
+
+    const openCommand = process.platform === "win32"
+      ? "start"
+      : process.platform === "darwin"
+      ? "open"
+      : "xdg-open";
+    exec(`${openCommand} http://localhost:${PORT}`);
+  });
+
+  // Keep the process alive
+  await new Promise<void>(() => {});
 }
 
 function getMimeType(path: string): string {

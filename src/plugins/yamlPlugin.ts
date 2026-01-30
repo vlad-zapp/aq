@@ -10,23 +10,23 @@ import {
   type Scalar,
   type YAMLMap,
   type YAMLSeq,
-} from "npm:yaml";
-import { AqPlugin } from "../infrastructure/aqPlugin.ts";
+} from "yaml";
+import { AqPlugin } from "../infrastructure/aqPlugin";
 import {
   type CommentEntry,
   getComment,
   getComments,
   hasComments,
   setComment,
-} from "../infrastructure/comments.ts";
+} from "../infrastructure/comments";
 import {
   type AnchorEntry,
   type AnchorMap,
   getAnchors,
   hasAnchors,
   setAnchor,
-} from "../infrastructure/anchors.ts";
-import { MULTI_DOC, ParsedData } from "../infrastructure/ParsedData.ts";
+} from "../infrastructure/anchors";
+import { MULTI_DOC, ParsedData } from "../infrastructure/ParsedData";
 
 /**
  * Normalize npm:yaml comment text to our format.

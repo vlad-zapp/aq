@@ -1,14 +1,14 @@
-import { AqPlugin } from "../infrastructure/aqPlugin.ts";
+import { AqPlugin } from "../infrastructure/aqPlugin";
 import {
   parse as parseToml,
   stringify as stringifyToml,
-} from "https://deno.land/std/toml/mod.ts";
-import { ParsedData } from "../infrastructure/ParsedData.ts";
-import { type CommentEntry, getComment, setComment } from "../infrastructure/comments.ts";
-import { findUnquotedMarker } from "../infrastructure/commentExtractor.ts";
+} from "smol-toml";
+import { ParsedData } from "../infrastructure/ParsedData";
+import { type CommentEntry, getComment, setComment } from "../infrastructure/comments";
+import { findUnquotedMarker } from "../infrastructure/commentExtractor";
 import {
   reinsertCommentsDeep,
-} from "../infrastructure/commentReinserter.ts";
+} from "../infrastructure/commentReinserter";
 
 /**
  * Split a TOML section path respecting quoted segments.

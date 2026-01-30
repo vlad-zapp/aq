@@ -1,6 +1,6 @@
-# Node/Deno dependencies
+# Node dependencies
 node_modules/
-deno.lock
+package-lock.json
 
 # Logs
 *.log

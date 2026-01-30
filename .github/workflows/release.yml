@@ -1,132 +1,63 @@
-name: Build and Release
+name: CI
 
 on:
   push:
+    branches: [main]
     tags:
       - "v*"
-  workflow_dispatch:
+  pull_request:
+    branches: [main]
 
 permissions:
-  contents: write # Grant write permissions for creating releases
+  contents: write
 
 jobs:
-  build-linux:
-    name: Build for Linux
+  test:
+    name: Test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+  release:
+    name: Create GitHub Release
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
       - name: Generate version.ts
         run: echo 'export const version = "${{ github.ref_name }}";' > ./version.ts
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v1
-        with:
-          deno-version: v1.x
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Embed assets
-        run: deno task embed-assets
-
-      - name: Build binary
-        run: deno compile --allow-all --unstable -o aq-${{ matrix.target }} --target ${{ matrix.target }} src/main.ts
-
-      - name: Archive artifact
-        run: zip aq-${{ matrix.target }}.zip aq-${{ matrix.target }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: aq-${{ matrix.target }}
-          path: aq-${{ matrix.target }}.zip
-
-  build-macos:
-    name: Build for macOS
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        target:
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v1
-        with:
-          deno-version: v1.x
-
-      - name: Embed assets
-        run: deno task embed-assets
-
-      - name: Build binary
-        run: deno compile --allow-all --unstable -o aq-${{ matrix.target }} --target ${{ matrix.target }} src/main.ts
-
-      - name: Archive artifact
-        run: zip aq-${{ matrix.target }}.zip aq-${{ matrix.target }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: aq-${{ matrix.target }}
-          path: aq-${{ matrix.target }}.zip
-
-  build-windows:
-    name: Build for Windows
-    runs-on: windows-latest
-    strategy:
-      matrix:
-        target:
-          - x86_64-pc-windows-msvc
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v1
-        with:
-          deno-version: v1.x
-
-      - name: Embed assets
-        run: deno task embed-assets
-
-      - name: Build binary
-        run: deno compile --allow-all --unstable -o aq-${{ matrix.target }} --target ${{ matrix.target }} src/main.ts
-
-      - name: Archive artifact
-        run: powershell Compress-Archive -Path aq-${{ matrix.target }}.exe -DestinationPath aq-${{ matrix.target }}.zip
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: aq-${{ matrix.target }}
-          path: aq-${{ matrix.target }}.zip
-
-  release:
-    name: Create GitHub Release
-    needs:
-      - build-linux
-      - build-macos
-      - build-windows
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+      - name: Build
+        run: npm run build
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*.zip
           body: |
-            🚀 **Aq Release**
-            This release includes precompiled binaries for the following platforms:
-            - Linux (x86_64, ARM64)
-            - macOS (x86_64, ARM64)
-            - Windows (x86_64)
+            Release ${{ github.ref_name }}
           draft: false
           prerelease: false

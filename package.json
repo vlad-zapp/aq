@@ -1,0 +1,33 @@
+{
+  "name": "aq",
+  "version": "0.0.0-dev",
+  "description": "Universal query tool for structured data with comment preservation",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "bin": {
+    "aq": "dist/src/main.js"
+  },
+  "scripts": {
+    "embed-assets": "node scripts/embed-assets.mjs",
+    "build": "npm run embed-assets && tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "files": [
+    "dist/"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "fast-xml-parser": "^4.3.0",
+    "smol-toml": "^1.1.0",
+    "yaml": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.0.0"
+  }
+}

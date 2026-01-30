@@ -117,14 +117,14 @@ import {
     setComment,
     type CommentMap,
     type CommentEntry,
-} from "./infrastructure/comments.ts";
+} from "./infrastructure/comments";
 import {
     getAnchor,
     getAnchors,
     setAnchor,
     type AnchorMap,
     type AnchorEntry,
-} from "./infrastructure/anchors.ts";
+} from "./infrastructure/anchors";
 
 export function aqComments(
     this: object,

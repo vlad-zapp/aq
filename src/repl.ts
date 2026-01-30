@@ -1,9 +1,8 @@
-import { tracked } from "./replExtensions.ts";
-import { evaluateCommand, autocomplete, getCompletionKeys } from "./replHelpers.ts";
+import * as util from "node:util";
+import { tracked } from "./replExtensions";
+import { evaluateCommand, getCompletionKeys } from "./replHelpers";
 
 export class MiniRepl {
-  readonly #decoder = new TextDecoder();
-  readonly #encoder = new TextEncoder();
   #history: string[] = [];
   #historyIndex: number = -1;
   #buffer: string = "";
@@ -14,7 +13,6 @@ export class MiniRepl {
 
   async start(data: unknown): Promise<unknown> {
     (globalThis as any).data = tracked(data);
-    await Deno.stdin.setRaw(true);
 
     this.#writeLn("💡 Type JavaScript expressions to interact with the data.");
     this.#writeLn("💡 Press Ctrl+D to exit.");
@@ -22,15 +20,27 @@ export class MiniRepl {
     this.#writeLn();
     this.#writePrompt();
 
-    const buf = new Uint8Array(1024);
-    while (!this.#done) {
-      const n = Deno.stdin.readSync(buf);
-      if (n === null) break;
-      const input = this.#decoder.decode(buf.subarray(0, n));
-      this.#handleInput(input);
+    if (typeof process.stdin.setRawMode === "function") {
+      process.stdin.setRawMode(true);
     }
-    this.#writeLn();
-    return this.#result;
+    process.stdin.resume();
+    process.stdin.setEncoding("utf-8");
+
+    return new Promise<unknown>((resolve) => {
+      const onData = (chunk: string) => {
+        this.#handleInput(chunk);
+        if (this.#done) {
+          if (typeof process.stdin.setRawMode === "function") {
+            process.stdin.setRawMode(false);
+          }
+          process.stdin.pause();
+          process.stdin.removeListener("data", onData);
+          this.#writeLn();
+          resolve(this.#result);
+        }
+      };
+      process.stdin.on("data", onData);
+    });
   }
 
   #handleInput(input: string): void {
@@ -39,7 +49,7 @@ export class MiniRepl {
       return;
     }
 
-    if (input === "\r") { // Enter
+    if (input === "\r" || input === "\n") { // Enter
       const current = this.#buffer;
       const joined = [...this.#multilineBuffer, current].join("\n").trim();
 
@@ -61,7 +71,7 @@ export class MiniRepl {
           this.#writeLn();
           this.#result = evaluateCommand(joined, (globalThis as any).data);
           if (this.#result !== undefined) {
-            this.#writeLn(Deno.inspect(this.#result, { colors: true }));
+            this.#writeLn(util.inspect(this.#result, { colors: true }));
             this.#writeLn();
           }
         } catch (e) {
@@ -263,11 +273,11 @@ export class MiniRepl {
   }
 
   #write(str: string = ""): void {
-    Deno.stderr.writeSync(this.#encoder.encode(str));
+    process.stderr.write(str);
   }
 
   #writeLn(str: string = ""): void {
-    Deno.stderr.writeSync(this.#encoder.encode(str + "\n"));
+    process.stderr.write(str + "\n");
   }
 
   #appendToCursor(str: string = ""): void {

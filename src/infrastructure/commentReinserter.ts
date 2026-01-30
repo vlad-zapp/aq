@@ -2,7 +2,7 @@
  * Re-inserts comments into encoded output by matching key names in output lines.
  */
 
-import { type CommentMap, getComments, hasComments } from "./comments.ts";
+import { type CommentMap, getComments, hasComments } from "./comments";
 
 export type CommentFormat = "hash" | "semicolon" | "doubleslash" | "xml";
 

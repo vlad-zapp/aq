@@ -1,9 +1,6 @@
-import {
-  assert,
-  assertEquals,
-  assertExists,
-  assertNotEquals,
-} from "https://deno.land/std/testing/asserts.ts";
+import { test, expect } from "vitest";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import {
   COMMENTS,
   type CommentEntry,
@@ -14,643 +11,643 @@ import {
   setComment,
   setComments,
   cloneComments,
-} from "../src/infrastructure/comments.ts";
-import { MULTI_DOC, ParsedData } from "../src/infrastructure/ParsedData.ts";
-import { unwrapParsedData } from "../src/utils.ts";
+} from "../src/infrastructure/comments";
+import { MULTI_DOC, ParsedData } from "../src/infrastructure/ParsedData";
+import { unwrapParsedData } from "../src/utils";
 import {
   findUnquotedMarker,
   extractHashComments,
   extractJsoncComments,
   stripJsoncComments,
   extractXmlComments,
-} from "../src/infrastructure/commentExtractor.ts";
-import { YamlPlugin } from "../src/plugins/yamlPlugin.ts";
-import { JsonPlugin } from "../src/plugins/jsonPlugin.ts";
-import { TomlPlugin } from "../src/plugins/tomlPlugin.ts";
-import { IniPlugin } from "../src/plugins/iniPlugin.ts";
-import { XmlPlugin } from "../src/plugins/xmlPlugin.ts";
+} from "../src/infrastructure/commentExtractor";
+import { YamlPlugin } from "../src/plugins/yamlPlugin";
+import { JsonPlugin } from "../src/plugins/jsonPlugin";
+import { TomlPlugin } from "../src/plugins/tomlPlugin";
+import { IniPlugin } from "../src/plugins/iniPlugin";
+import { XmlPlugin } from "../src/plugins/xmlPlugin";
 
 // ============================================================
 // Comment Infrastructure Tests
 // ============================================================
 
-Deno.test("setComment and getComment basic functionality", () => {
+test("setComment and getComment basic functionality", () => {
   const obj: Record<string, unknown> = { name: "John", age: 30 };
   setComment(obj, "name", { before: "Person name", after: "inline" });
 
   const entry = getComment(obj, "name");
-  assertExists(entry);
-  assertEquals(entry!.before, "Person name");
-  assertEquals(entry!.after, "inline");
+  expect(entry).toBeDefined();
+  expect(entry!.before).toEqual("Person name");
+  expect(entry!.after).toEqual("inline");
 });
 
-Deno.test("comments are not enumerable", () => {
+test("comments are not enumerable", () => {
   const obj: Record<string, unknown> = { name: "John" };
   setComment(obj, "name", { before: "comment" });
 
-  assertEquals(Object.keys(obj), ["name"]);
-  assertEquals(JSON.stringify(obj), '{"name":"John"}');
+  expect(Object.keys(obj)).toEqual(["name"]);
+  expect(JSON.stringify(obj)).toEqual('{"name":"John"}');
 });
 
-Deno.test("hasComments returns false for plain objects", () => {
-  assertEquals(hasComments({ name: "John" }), false);
+test("hasComments returns false for plain objects", () => {
+  expect(hasComments({ name: "John" })).toEqual(false);
 });
 
-Deno.test("hasComments returns true after setComment", () => {
+test("hasComments returns true after setComment", () => {
   const obj = { name: "John" };
   setComment(obj, "name", { before: "test" });
-  assertEquals(hasComments(obj), true);
+  expect(hasComments(obj)).toEqual(true);
 });
 
-Deno.test("container comments use '#' key", () => {
+test("container comments use '#' key", () => {
   const obj = { name: "John" };
   setComment(obj, "#", { before: "header", after: "trailer" });
 
   const entry = getComment(obj); // no key = container
-  assertExists(entry);
-  assertEquals(entry!.before, "header");
-  assertEquals(entry!.after, "trailer");
+  expect(entry).toBeDefined();
+  expect(entry!.before).toEqual("header");
+  expect(entry!.after).toEqual("trailer");
 });
 
-Deno.test("comments on arrays use string indices", () => {
+test("comments on arrays use string indices", () => {
   const arr = [1, 2, 3];
   setComment(arr, "0", { before: "first item" });
   setComment(arr, "2", { after: "last item" });
 
-  assertEquals(getComment(arr, "0")?.before, "first item");
-  assertEquals(getComment(arr, "2")?.after, "last item");
+  expect(getComment(arr, "0")?.before).toEqual("first item");
+  expect(getComment(arr, "2")?.after).toEqual("last item");
 });
 
-Deno.test("Symbol.for ensures cross-module consistency", () => {
+test("Symbol.for ensures cross-module consistency", () => {
   const sym: symbol = Symbol.for("aq:comments");
-  assertEquals(sym, COMMENTS as symbol);
+  expect(sym).toEqual(COMMENTS as symbol);
 });
 
-Deno.test("getComments returns full map", () => {
+test("getComments returns full map", () => {
   const obj = { a: 1, b: 2 };
   setComment(obj, "a", { before: "first" });
   setComment(obj, "b", { after: "second" });
 
   const map = getComments(obj);
-  assertExists(map);
-  assertEquals(map!["a"].before, "first");
-  assertEquals(map!["b"].after, "second");
+  expect(map).toBeDefined();
+  expect(map!["a"].before).toEqual("first");
+  expect(map!["b"].after).toEqual("second");
 });
 
-Deno.test("setComments replaces entire map", () => {
+test("setComments replaces entire map", () => {
   const obj = { x: 1 };
   setComments(obj, { x: { before: "old" } });
-  assertEquals(getComment(obj, "x")?.before, "old");
+  expect(getComment(obj, "x")?.before).toEqual("old");
 
   setComments(obj, { x: { before: "new" } });
-  assertEquals(getComment(obj, "x")?.before, "new");
+  expect(getComment(obj, "x")?.before).toEqual("new");
 });
 
-Deno.test("cloneComments copies to new object", () => {
+test("cloneComments copies to new object", () => {
   const source = { a: 1 };
   setComment(source, "a", { before: "from source" });
 
   const target = { a: 1 };
   cloneComments(source, target);
-  assertEquals(getComment(target, "a")?.before, "from source");
+  expect(getComment(target, "a")?.before).toEqual("from source");
 });
 
-Deno.test("getComment returns undefined for objects without comments", () => {
+test("getComment returns undefined for objects without comments", () => {
   const obj = { name: "John" };
-  assertEquals(getComment(obj, "name"), undefined);
-  assertEquals(getComment(obj), undefined);
+  expect(getComment(obj, "name")).toEqual(undefined);
+  expect(getComment(obj)).toEqual(undefined);
 });
 
 // ============================================================
 // Comment Extractor Tests
 // ============================================================
 
-Deno.test("findUnquotedMarker finds # outside quotes", () => {
-  assertEquals(findUnquotedMarker("name: John  # comment", "#"), 12);
+test("findUnquotedMarker finds # outside quotes", () => {
+  expect(findUnquotedMarker("name: John  # comment", "#")).toEqual(12);
 });
 
-Deno.test("findUnquotedMarker ignores # inside double quotes", () => {
-  assertEquals(findUnquotedMarker('name: "John # not comment"', "#"), -1);
+test("findUnquotedMarker ignores # inside double quotes", () => {
+  expect(findUnquotedMarker('name: "John # not comment"', "#")).toEqual(-1);
 });
 
-Deno.test("findUnquotedMarker ignores # inside single quotes", () => {
-  assertEquals(findUnquotedMarker("name: 'John # not comment'", "#"), -1);
+test("findUnquotedMarker ignores # inside single quotes", () => {
+  expect(findUnquotedMarker("name: 'John # not comment'", "#")).toEqual(-1);
 });
 
-Deno.test("findUnquotedMarker returns -1 when no marker", () => {
-  assertEquals(findUnquotedMarker("name: John", "#"), -1);
+test("findUnquotedMarker returns -1 when no marker", () => {
+  expect(findUnquotedMarker("name: John", "#")).toEqual(-1);
 });
 
-Deno.test("extractHashComments extracts full-line comments", () => {
+test("extractHashComments extracts full-line comments", () => {
   const source = "# header\nname: John\n# before age\nage: 30";
   const comments = extractHashComments(source);
-  assertEquals(comments.length, 2);
-  assertEquals(comments[0].text, "header");
-  assertEquals(comments[0].inline, false);
-  assertEquals(comments[1].text, "before age");
-  assertEquals(comments[1].inline, false);
+  expect(comments.length).toEqual(2);
+  expect(comments[0].text).toEqual("header");
+  expect(comments[0].inline).toEqual(false);
+  expect(comments[1].text).toEqual("before age");
+  expect(comments[1].inline).toEqual(false);
 });
 
-Deno.test("extractHashComments extracts inline comments", () => {
+test("extractHashComments extracts inline comments", () => {
   const source = "name: John  # inline comment";
   const comments = extractHashComments(source);
-  assertEquals(comments.length, 1);
-  assertEquals(comments[0].text, "inline comment");
-  assertEquals(comments[0].inline, true);
+  expect(comments.length).toEqual(1);
+  expect(comments[0].text).toEqual("inline comment");
+  expect(comments[0].inline).toEqual(true);
 });
 
-Deno.test("extractJsoncComments extracts // comments", () => {
+test("extractJsoncComments extracts // comments", () => {
   const source = '// header\n{"name": "John"}';
   const comments = extractJsoncComments(source);
-  assertEquals(comments.length, 1);
-  assertEquals(comments[0].text, "header");
-  assertEquals(comments[0].type, "line");
+  expect(comments.length).toEqual(1);
+  expect(comments[0].text).toEqual("header");
+  expect(comments[0].type).toEqual("line");
 });
 
-Deno.test("extractJsoncComments extracts /* */ comments", () => {
+test("extractJsoncComments extracts /* */ comments", () => {
   const source = '/* block comment */\n{"name": "John"}';
   const comments = extractJsoncComments(source);
-  assertEquals(comments.length, 1);
-  assertEquals(comments[0].text, "block comment");
-  assertEquals(comments[0].type, "block");
+  expect(comments.length).toEqual(1);
+  expect(comments[0].text).toEqual("block comment");
+  expect(comments[0].type).toEqual("block");
 });
 
-Deno.test("extractJsoncComments handles inline // comment", () => {
+test("extractJsoncComments handles inline // comment", () => {
   const source = '{"name": "John", // inline\n"age": 30}';
   const comments = extractJsoncComments(source);
-  assertEquals(comments.length, 1);
-  assertEquals(comments[0].text, "inline");
-  assertEquals(comments[0].inline, true);
+  expect(comments.length).toEqual(1);
+  expect(comments[0].text).toEqual("inline");
+  expect(comments[0].inline).toEqual(true);
 });
 
-Deno.test("stripJsoncComments removes comments preserving positions", () => {
+test("stripJsoncComments removes comments preserving positions", () => {
   const source = '{\n  // comment\n  "name": "John"\n}';
   const stripped = stripJsoncComments(source);
-  assertEquals(stripped.includes("//"), false);
-  assertEquals(stripped.includes('"name"'), true);
+  expect(stripped.includes("//")).toEqual(false);
+  expect(stripped.includes('"name"')).toEqual(true);
   // Line count preserved
-  assertEquals(stripped.split("\n").length, source.split("\n").length);
+  expect(stripped.split("\n").length).toEqual(source.split("\n").length);
 });
 
-Deno.test("stripJsoncComments handles block comments", () => {
+test("stripJsoncComments handles block comments", () => {
   const source = '{\n  /* block */\n  "name": "John"\n}';
   const stripped = stripJsoncComments(source);
-  assertEquals(stripped.includes("/*"), false);
-  assertEquals(stripped.includes("*/"), false);
+  expect(stripped.includes("/*")).toEqual(false);
+  expect(stripped.includes("*/")).toEqual(false);
 });
 
-Deno.test("stripJsoncComments preserves // inside strings", () => {
+test("stripJsoncComments preserves // inside strings", () => {
   const source = '{"url": "https://example.com"}';
   const stripped = stripJsoncComments(source);
-  assertEquals(stripped, source);
+  expect(stripped).toEqual(source);
 });
 
-Deno.test("extractXmlComments extracts single-line comments", () => {
+test("extractXmlComments extracts single-line comments", () => {
   const source = "<!-- header -->\n<root>data</root>";
   const comments = extractXmlComments(source);
-  assertEquals(comments.length, 1);
-  assertEquals(comments[0].text, "header");
+  expect(comments.length).toEqual(1);
+  expect(comments[0].text).toEqual("header");
 });
 
-Deno.test("extractXmlComments extracts multi-line comments", () => {
+test("extractXmlComments extracts multi-line comments", () => {
   const source = "<!--\n  multi\n  line\n-->\n<root>data</root>";
   const comments = extractXmlComments(source);
-  assertEquals(comments.length, 1);
-  assertEquals(comments[0].text.includes("multi"), true);
+  expect(comments.length).toEqual(1);
+  expect(comments[0].text.includes("multi")).toEqual(true);
 });
 
 // ============================================================
 // Multi-Document Tests
 // ============================================================
 
-Deno.test("single YAML doc: unwrap gives direct object", () => {
+test("single YAML doc: unwrap gives direct object", () => {
   const input = "name: John\nage: 30\n";
   const parsed = YamlPlugin.decode(input);
   const data = unwrapParsedData([parsed]);
 
-  assertEquals((data as any).name, "John");
-  assertEquals((data as any).age, 30);
+  expect((data as any).name).toEqual("John");
+  expect((data as any).age).toEqual(30);
 });
 
-Deno.test("multi-doc YAML: unwrap gives array", async () => {
-  const input = await Deno.readTextFile("test/data/data2.yaml");
+test("multi-doc YAML: unwrap gives array", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/data2.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const data = unwrapParsedData([parsed]) as any[];
 
-  assertEquals(Array.isArray(data), true);
-  assertEquals(data[0].name, "John");
-  assertEquals(data[1].name, "Jane");
+  expect(Array.isArray(data)).toEqual(true);
+  expect(data[0].name).toEqual("John");
+  expect(data[1].name).toEqual("Jane");
 });
 
-Deno.test("multiple files: unwrap gives array of results", () => {
+test("multiple files: unwrap gives array of results", () => {
   const input1 = "name: John\n";
   const input2 = "name: Jane\n";
   const parsed1 = YamlPlugin.decode(input1);
   const parsed2 = YamlPlugin.decode(input2);
   const data = unwrapParsedData([parsed1, parsed2]) as any[];
 
-  assertEquals(Array.isArray(data), true);
-  assertEquals(data[0].name, "John");
-  assertEquals(data[1].name, "Jane");
+  expect(Array.isArray(data)).toEqual(true);
+  expect(data[0].name).toEqual("John");
+  expect(data[1].name).toEqual("Jane");
 });
 
-Deno.test("multi-doc YAML preserves MULTI_DOC symbol", async () => {
-  const input = await Deno.readTextFile("test/data/data2.yaml");
+test("multi-doc YAML preserves MULTI_DOC symbol", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/data2.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const data = unwrapParsedData([parsed]);
 
-  assertEquals((data as any)[MULTI_DOC], true);
+  expect((data as any)[MULTI_DOC]).toEqual(true);
 });
 
-Deno.test("multi-doc YAML encode preserves --- separators", async () => {
-  const input = await Deno.readTextFile("test/data/data2.yaml");
+test("multi-doc YAML encode preserves --- separators", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/data2.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const data = unwrapParsedData([parsed]);
 
   const output = YamlPlugin.encode(data) as string;
-  assertEquals(output.includes("---"), true);
+  expect(output.includes("---")).toEqual(true);
 });
 
-Deno.test("single doc: ParsedData.isMultiDocument is false", () => {
+test("single doc: ParsedData.isMultiDocument is false", () => {
   const input = "name: John\n";
   const parsed = YamlPlugin.decode(input);
-  assertEquals(parsed.isMultiDocument, false);
+  expect(parsed.isMultiDocument).toEqual(false);
 });
 
-Deno.test("multi doc: ParsedData.isMultiDocument is true", async () => {
-  const input = await Deno.readTextFile("test/data/data2.yaml");
+test("multi doc: ParsedData.isMultiDocument is true", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/data2.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
-  assertEquals(parsed.isMultiDocument, true);
+  expect(parsed.isMultiDocument).toEqual(true);
 });
 
 // ============================================================
 // YAML Comment Tests
 // ============================================================
 
-Deno.test("YAML: header comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.yaml");
+test("YAML: header comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const header = getComment(doc);
-  assertExists(header);
-  assertEquals(header!.before, "This is a header comment");
+  expect(header).toBeDefined();
+  expect(header!.before).toEqual("This is a header comment");
 });
 
-Deno.test("YAML: inline comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.yaml");
+test("YAML: inline comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const nameComment = getComment(doc, "name");
-  assertExists(nameComment);
-  assertEquals(nameComment!.after, "inline name comment");
+  expect(nameComment).toBeDefined();
+  expect(nameComment!.after).toEqual("inline name comment");
 });
 
-Deno.test("YAML: before comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.yaml");
+test("YAML: before comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const ageComment = getComment(doc, "age");
-  assertExists(ageComment);
-  assertEquals(ageComment!.before, "Age of the person");
+  expect(ageComment).toBeDefined();
+  expect(ageComment!.before).toEqual("Age of the person");
 });
 
-Deno.test("YAML: nested comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.yaml");
+test("YAML: nested comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
   const address = doc.address as Record<string, unknown>;
 
   const streetComment = getComment(address, "street");
-  assertExists(streetComment);
-  assertEquals(streetComment!.before, "Street info");
-  assertEquals(streetComment!.after, "primary address");
+  expect(streetComment).toBeDefined();
+  expect(streetComment!.before).toEqual("Street info");
+  expect(streetComment!.after).toEqual("primary address");
 });
 
-Deno.test("YAML: trailing comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.yaml");
+test("YAML: trailing comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const container = getComment(doc);
-  assertExists(container);
-  assertEquals(container!.after, "Trailing comment");
+  expect(container).toBeDefined();
+  expect(container!.after).toEqual("Trailing comment");
 });
 
-Deno.test("YAML: array item comments extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.yaml");
+test("YAML: array item comments extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
   const children = doc.children as unknown[];
 
   const firstChild = getComment(children, "0");
-  assertExists(firstChild);
-  assertEquals(firstChild!.before, "First child");
+  expect(firstChild).toBeDefined();
+  expect(firstChild!.before).toEqual("First child");
 
   const secondChild = getComment(children, "1");
-  assertExists(secondChild);
-  assertEquals(secondChild!.before, "Second child");
+  expect(secondChild).toBeDefined();
+  expect(secondChild!.before).toEqual("Second child");
 });
 
-Deno.test("YAML: multi-doc comments extracted per document", async () => {
-  const input = await Deno.readTextFile("test/data/multi-doc-commented.yaml");
+test("YAML: multi-doc comments extracted per document", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/multi-doc-commented.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
 
   const doc0 = parsed.documents[0] as Record<string, unknown>;
   const doc0Header = getComment(doc0);
-  assertExists(doc0Header);
-  assertEquals(doc0Header!.before, "First document header");
+  expect(doc0Header).toBeDefined();
+  expect(doc0Header!.before).toEqual("First document header");
 
   const doc0Name = getComment(doc0, "name");
-  assertExists(doc0Name);
-  assertEquals(doc0Name!.after, "person name");
+  expect(doc0Name).toBeDefined();
+  expect(doc0Name!.after).toEqual("person name");
 
   const doc1 = parsed.documents[1] as Record<string, unknown>;
   const doc1Header = getComment(doc1);
-  assertExists(doc1Header);
-  assertEquals(doc1Header!.before, "Second document header");
+  expect(doc1Header).toBeDefined();
+  expect(doc1Header!.before).toEqual("Second document header");
 });
 
-Deno.test("YAML: encode preserves comments in output", () => {
+test("YAML: encode preserves comments in output", () => {
   const input = "# Header comment\nname: John  # inline\n# before age\nage: 30\n";
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const output = YamlPlugin.encode(doc) as string;
-  assertEquals(output.includes("# Header comment"), true);
-  assertEquals(output.includes("# inline"), true);
-  assertEquals(output.includes("# before age"), true);
+  expect(output.includes("# Header comment")).toEqual(true);
+  expect(output.includes("# inline")).toEqual(true);
+  expect(output.includes("# before age")).toEqual(true);
 });
 
-Deno.test("YAML: consecutive comment lines merge into multi-line header", () => {
+test("YAML: consecutive comment lines merge into multi-line header", () => {
   const input = "# line 1\n# line 2\nname: John\n";
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   // Comments before the first key become the document header, not a key comment
   const header = getComment(doc);
-  assertExists(header);
-  assertEquals(header!.before, "line 1\nline 2");
+  expect(header).toBeDefined();
+  expect(header!.before).toEqual("line 1\nline 2");
 
   // The first key should NOT have the header duplicated as its before comment
   const nameComment = getComment(doc, "name");
-  assertEquals(nameComment, undefined);
+  expect(nameComment).toEqual(undefined);
 });
 
-Deno.test("YAML: quoted # is not a comment", () => {
+test("YAML: quoted # is not a comment", () => {
   const input = 'name: "John # not a comment"\nage: 30\n';
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(doc.name, "John # not a comment");
+  expect(doc.name).toEqual("John # not a comment");
   const nameComment = getComment(doc, "name");
   // Should not have an inline comment
-  assertEquals(nameComment?.after, undefined);
+  expect(nameComment?.after).toEqual(undefined);
 });
 
-Deno.test("YAML: data values are correct despite comments", async () => {
-  const input = await Deno.readTextFile("test/data/commented.yaml");
+test("YAML: data values are correct despite comments", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(doc.name, "John");
-  assertEquals(doc.age, 30);
-  assertEquals(doc.isEmployed, true);
-  assertEquals((doc.address as any).street, "123 Main St");
-  assertEquals((doc.address as any).city, "Springfield");
+  expect(doc.name).toEqual("John");
+  expect(doc.age).toEqual(30);
+  expect(doc.isEmployed).toEqual(true);
+  expect((doc.address as any).street).toEqual("123 Main St");
+  expect((doc.address as any).city).toEqual("Springfield");
 });
 
 // ============================================================
 // TOML Comment Tests
 // ============================================================
 
-Deno.test("TOML: header comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.toml");
+test("TOML: header comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.toml"), "utf-8");
   const parsed = TomlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const header = getComment(doc);
-  assertExists(header);
-  assertEquals(header!.before, "Configuration file header");
+  expect(header).toBeDefined();
+  expect(header!.before).toEqual("Configuration file header");
 });
 
-Deno.test("TOML: inline comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.toml");
+test("TOML: inline comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.toml"), "utf-8");
   const parsed = TomlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const titleComment = getComment(doc, "title");
-  assertExists(titleComment);
-  assertEquals(titleComment!.after, "inline title comment");
+  expect(titleComment).toBeDefined();
+  expect(titleComment!.after).toEqual("inline title comment");
 });
 
-Deno.test("TOML: before comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.toml");
+test("TOML: before comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.toml"), "utf-8");
   const parsed = TomlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const nameComment = getComment(doc, "name");
-  assertExists(nameComment);
-  assertEquals(nameComment!.before, "About the owner");
+  expect(nameComment).toBeDefined();
+  expect(nameComment!.before).toEqual("About the owner");
 });
 
-Deno.test("TOML: data values are correct", async () => {
-  const input = await Deno.readTextFile("test/data/commented.toml");
+test("TOML: data values are correct", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.toml"), "utf-8");
   const parsed = TomlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(doc.title, "My Config");
-  assertEquals(doc.name, "John");
-  assertEquals(doc.age, 30);
-  assertEquals((doc.address as any).street, "123 Main St");
+  expect(doc.title).toEqual("My Config");
+  expect(doc.name).toEqual("John");
+  expect(doc.age).toEqual(30);
+  expect((doc.address as any).street).toEqual("123 Main St");
 });
 
-Deno.test("TOML: encode preserves comments", () => {
+test("TOML: encode preserves comments", () => {
   const input = "# Header\ntitle = \"test\"  # inline\n";
   const parsed = TomlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const output = TomlPlugin.encode(doc) as string;
-  assertEquals(output.includes("# Header"), true);
-  assertEquals(output.includes("# inline"), true);
+  expect(output.includes("# Header")).toEqual(true);
+  expect(output.includes("# inline")).toEqual(true);
 });
 
 // ============================================================
 // INI Comment Tests
 // ============================================================
 
-Deno.test("INI: header comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.ini");
+test("INI: header comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.ini"), "utf-8");
   const parsed = IniPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const header = getComment(doc);
-  assertExists(header);
-  assertEquals(header!.before, "Configuration file header");
+  expect(header).toBeDefined();
+  expect(header!.before).toEqual("Configuration file header");
 });
 
-Deno.test("INI: before comment extracted on key", async () => {
-  const input = await Deno.readTextFile("test/data/commented.ini");
+test("INI: before comment extracted on key", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.ini"), "utf-8");
   const parsed = IniPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
   const person = doc.person as Record<string, unknown>;
 
   const ageComment = getComment(person, "age");
-  assertExists(ageComment);
-  assertEquals(ageComment!.before, "Age of person");
+  expect(ageComment).toBeDefined();
+  expect(ageComment!.before).toEqual("Age of person");
 });
 
-Deno.test("INI: section comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.ini");
+test("INI: section comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.ini"), "utf-8");
   const parsed = IniPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const addressComment = getComment(doc, "address");
-  assertExists(addressComment);
-  assertEquals(addressComment!.before, "Address section");
+  expect(addressComment).toBeDefined();
+  expect(addressComment!.before).toEqual("Address section");
 });
 
-Deno.test("INI: data values are correct", async () => {
-  const input = await Deno.readTextFile("test/data/commented.ini");
+test("INI: data values are correct", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.ini"), "utf-8");
   const parsed = IniPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals((doc as any).person.name, "John");
+  expect((doc as any).person.name).toEqual("John");
   // INI parser returns all values as strings
-  assertEquals(String((doc as any).person.age), "30");
-  assertEquals((doc as any).address.street, "Main St 123");
+  expect(String((doc as any).person.age)).toEqual("30");
+  expect((doc as any).address.street).toEqual("Main St 123");
 });
 
-Deno.test("INI: encode produces valid output", async () => {
-  const input = await Deno.readTextFile("test/data/commented.ini");
+test("INI: encode produces valid output", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.ini"), "utf-8");
   const parsed = IniPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const output = IniPlugin.encode(doc) as string;
-  assertEquals(typeof output, "string");
-  assertEquals(output.includes("name"), true);
+  expect(typeof output).toEqual("string");
+  expect(output.includes("name")).toEqual(true);
 });
 
 // ============================================================
 // JSONC Comment Tests
 // ============================================================
 
-Deno.test("JSONC: line comments extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.jsonc");
+test("JSONC: line comments extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.jsonc"), "utf-8");
   const parsed = JsonPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const nameComment = getComment(doc, "name");
-  assertExists(nameComment);
-  assertEquals(nameComment!.before, "Person name");
+  expect(nameComment).toBeDefined();
+  expect(nameComment!.before).toEqual("Person name");
 });
 
-Deno.test("JSONC: inline comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.jsonc");
+test("JSONC: inline comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.jsonc"), "utf-8");
   const parsed = JsonPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const ageComment = getComment(doc, "age");
-  assertExists(ageComment);
-  assertEquals(ageComment!.after, "inline age comment");
+  expect(ageComment).toBeDefined();
+  expect(ageComment!.after).toEqual("inline age comment");
 });
 
-Deno.test("JSONC: block comment extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.jsonc");
+test("JSONC: block comment extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.jsonc"), "utf-8");
   const parsed = JsonPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const addressComment = getComment(doc, "address");
-  assertExists(addressComment);
-  assertEquals(addressComment!.before, "Address block");
+  expect(addressComment).toBeDefined();
+  expect(addressComment!.before).toEqual("Address block");
 });
 
-Deno.test("JSONC: data values are correct", async () => {
-  const input = await Deno.readTextFile("test/data/commented.jsonc");
+test("JSONC: data values are correct", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.jsonc"), "utf-8");
   const parsed = JsonPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(doc.name, "John");
-  assertEquals(doc.age, 30);
-  assertEquals((doc.address as any).street, "123 Main St");
+  expect(doc.name).toEqual("John");
+  expect(doc.age).toEqual(30);
+  expect((doc.address as any).street).toEqual("123 Main St");
 });
 
-Deno.test("JSONC: standard JSON still works without comments", () => {
+test("JSONC: standard JSON still works without comments", () => {
   const input = '{"name": "John", "age": 30}';
   const parsed = JsonPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(doc.name, "John");
-  assertEquals(doc.age, 30);
-  assertEquals(hasComments(doc), false);
+  expect(doc.name).toEqual("John");
+  expect(doc.age).toEqual(30);
+  expect(hasComments(doc)).toEqual(false);
 });
 
-Deno.test("JSONC: encode preserves comments", () => {
+test("JSONC: encode preserves comments", () => {
   const input = '{\n  // Person name\n  "name": "John",\n  "age": 30  // inline\n}';
   const parsed = JsonPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const output = JsonPlugin.encode(doc) as string;
-  assertEquals(output.includes("// Person name"), true);
-  assertEquals(output.includes("// inline"), true);
+  expect(output.includes("// Person name")).toEqual(true);
+  expect(output.includes("// inline")).toEqual(true);
 });
 
-Deno.test("JSONC: // inside string values is not stripped", () => {
+test("JSONC: // inside string values is not stripped", () => {
   const input = '{"url": "https://example.com"}';
   const parsed = JsonPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(doc.url, "https://example.com");
+  expect(doc.url).toEqual("https://example.com");
 });
 
 // ============================================================
 // XML Comment Tests
 // ============================================================
 
-Deno.test("XML: comment before element extracted", async () => {
-  const input = await Deno.readTextFile("test/data/commented.xml");
+test("XML: comment before element extracted", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.xml"), "utf-8");
   const parsed = XmlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   // The XML parser produces a structure; check comments are attached
-  assertEquals(hasComments(doc), true);
+  expect(hasComments(doc)).toEqual(true);
 });
 
-Deno.test("XML: data values are correct", async () => {
-  const input = await Deno.readTextFile("test/data/commented.xml");
+test("XML: data values are correct", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.xml"), "utf-8");
   const parsed = XmlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(typeof doc, "object");
+  expect(typeof doc).toEqual("object");
   // XML structure depends on the parser's output format
-  assertExists(doc);
+  expect(doc).toBeDefined();
 });
 
 // ============================================================
 // Edge Case Tests
 // ============================================================
 
-Deno.test("YAML: empty object with header comment", () => {
+test("YAML: empty object with header comment", () => {
   // YAML parses empty document as null, which isn't an object
   // This should not throw
   const input = "# Just a comment\n";
   const parsed = YamlPlugin.decode(input);
-  assertEquals(parsed.documents.length, 1);
+  expect(parsed.documents.length).toEqual(1);
 });
 
-Deno.test("YAML: only data, no comments", () => {
+test("YAML: only data, no comments", () => {
   const input = "name: John\nage: 30\n";
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(doc.name, "John");
+  expect(doc.name).toEqual("John");
   // Should not crash, comments just won't be there
-  assertEquals(hasComments(doc), false);
+  expect(hasComments(doc)).toEqual(false);
 });
 
-Deno.test("YAML: deeply nested comments", () => {
+test("YAML: deeply nested comments", () => {
   const input = `
 a:
   b:
@@ -661,30 +658,30 @@ a:
   const doc = parsed.documents[0] as any;
 
   const cComment = getComment(doc.a.b, "c");
-  assertExists(cComment);
-  assertEquals(cComment!.before, "deep comment");
+  expect(cComment).toBeDefined();
+  expect(cComment!.before).toEqual("deep comment");
 });
 
-Deno.test("JSON: plain JSON file has no comments", () => {
+test("JSON: plain JSON file has no comments", () => {
   const input = '{"name": "test"}';
   const parsed = JsonPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(hasComments(doc), false);
-  assertEquals(doc.name, "test");
+  expect(hasComments(doc)).toEqual(false);
+  expect(doc.name).toEqual("test");
 });
 
-Deno.test("YAML: comment with no space after #", () => {
+test("YAML: comment with no space after #", () => {
   const input = "#compact\nname: John\n";
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const header = getComment(doc);
-  assertExists(header);
-  assertEquals(header!.before, "compact");
+  expect(header).toBeDefined();
+  expect(header!.before).toEqual("compact");
 });
 
-Deno.test("comments do not affect for...in iteration", () => {
+test("comments do not affect for...in iteration", () => {
   const obj: Record<string, unknown> = { a: 1, b: 2 };
   setComment(obj, "a", { before: "test" });
 
@@ -692,123 +689,118 @@ Deno.test("comments do not affect for...in iteration", () => {
   for (const key in obj) {
     keys.push(key);
   }
-  assertEquals(keys, ["a", "b"]);
+  expect(keys).toEqual(["a", "b"]);
 });
 
-Deno.test("comments do not affect Object.entries", () => {
+test("comments do not affect Object.entries", () => {
   const obj: Record<string, unknown> = { x: 10 };
   setComment(obj, "x", { after: "comment" });
 
-  assertEquals(Object.entries(obj), [["x", 10]]);
+  expect(Object.entries(obj)).toEqual([["x", 10]]);
 });
 
-Deno.test("comments do not affect JSON.stringify", () => {
+test("comments do not affect JSON.stringify", () => {
   const obj = { data: "value" };
   setComment(obj, "data", { before: "important", after: "note" });
   setComment(obj, "#", { before: "header" });
 
-  assertEquals(JSON.stringify(obj), '{"data":"value"}');
+  expect(JSON.stringify(obj)).toEqual('{"data":"value"}');
 });
 
-Deno.test("YAML: multiple comments between keys", () => {
+test("YAML: multiple comments between keys", () => {
   const input = "a: 1\n# comment 1\n# comment 2\nb: 2\n";
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const bComment = getComment(doc, "b");
-  assertExists(bComment);
-  assertEquals(bComment!.before, "comment 1\ncomment 2");
+  expect(bComment).toBeDefined();
+  expect(bComment!.before).toEqual("comment 1\ncomment 2");
 });
 
-Deno.test("ParsedData stores sourceFormat", () => {
+test("ParsedData stores sourceFormat", () => {
   const pd = new ParsedData([{}], { sourceFormat: "YAML" });
-  assertEquals(pd.sourceFormat, "YAML");
+  expect(pd.sourceFormat).toEqual("YAML");
 });
 
-Deno.test("ParsedData.isMultiDocument defaults to false for single doc", () => {
+test("ParsedData.isMultiDocument defaults to false for single doc", () => {
   const pd = new ParsedData([{}]);
-  assertEquals(pd.isMultiDocument, false);
+  expect(pd.isMultiDocument).toEqual(false);
 });
 
-Deno.test("ParsedData.isMultiDocument defaults to true for multiple docs", () => {
+test("ParsedData.isMultiDocument defaults to true for multiple docs", () => {
   const pd = new ParsedData([{}, {}]);
-  assertEquals(pd.isMultiDocument, true);
+  expect(pd.isMultiDocument).toEqual(true);
 });
 
-Deno.test("unwrapParsedData: empty array returns undefined", () => {
+test("unwrapParsedData: empty array returns undefined", () => {
   const result = unwrapParsedData([]);
-  assertEquals(result, undefined);
+  expect(result).toEqual(undefined);
 });
 
-Deno.test("TOML: section before-comment on root key", async () => {
-  const input = await Deno.readTextFile("test/data/commented.toml");
+test("TOML: section before-comment on root key", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/commented.toml"), "utf-8");
   const parsed = TomlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   const ageComment = getComment(doc, "age");
-  assertExists(ageComment);
-  assertEquals(ageComment!.before, "Age setting");
+  expect(ageComment).toBeDefined();
+  expect(ageComment!.before).toEqual("Age setting");
 });
 
-Deno.test("YAML: multi-doc with trailing comment on second doc", async () => {
-  const input = await Deno.readTextFile(
-    "test/data/multi-doc-commented.yaml",
-  );
+test("YAML: multi-doc with trailing comment on second doc", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/multi-doc-commented.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc1 = parsed.documents[1] as Record<string, unknown>;
 
   const trailing = getComment(doc1);
-  assertExists(trailing);
-  assertEquals(trailing!.after, "Trailing comment");
+  expect(trailing).toBeDefined();
+  expect(trailing!.after).toEqual("Trailing comment");
 });
 
 // ============================================================
 // YAML Anchors & Aliases Tests
 // ============================================================
 
-Deno.test("YAML: anchors and aliases are resolved", async () => {
-  const input = await Deno.readTextFile("test/data/anchors.yaml");
+test("YAML: anchors and aliases are resolved", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/anchors.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
   const data = doc.data as Record<string, unknown>;
 
   // Anchor definition
   const chartRefs = data.chart_refs as any;
-  assertEquals(chartRefs.ingress["ingress-nginx"].type, "tar");
-  assertEquals(
-    chartRefs.ingress["ingress-nginx"].location,
-    "https://example.com/charts/ingress-nginx-4.13.0.tgz",
-  );
+  expect(chartRefs.ingress["ingress-nginx"].type).toEqual("tar");
+  expect(chartRefs.ingress["ingress-nginx"].location).toEqual("https://example.com/charts/ingress-nginx-4.13.0.tgz");
 
   // Alias usage resolves to the same data
   const charts = data.charts as any;
-  assertEquals(charts.kubernetes.ingress.type, "tar");
-  assertEquals(charts.kubernetes.ingress.subpath, "ingress-nginx");
-  assertEquals(charts.osh.mariadb.subpath, "mariadb");
-  assertEquals(charts.osh.memcached.subpath, "memcached");
-  assertEquals(charts.monitoring.rabbitmq.subpath, "rabbitmq");
+  expect(charts.kubernetes.ingress.type).toEqual("tar");
+  expect(charts.kubernetes.ingress.subpath).toEqual("ingress-nginx");
+  expect(charts.osh.mariadb.subpath).toEqual("mariadb");
+  expect(charts.osh.memcached.subpath).toEqual("memcached");
+  expect(charts.monitoring.rabbitmq.subpath).toEqual("rabbitmq");
 });
 
-Deno.test("YAML: many aliases do not trigger resource exhaustion error", async () => {
-  const input = await Deno.readTextFile("test/data/anchors.yaml");
+test("YAML: many aliases do not trigger resource exhaustion error", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/anchors.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
   const data = doc.data as Record<string, unknown>;
 
   // Verify deeply nested alias reuse across sections
   const images = data.images as any;
-  assertEquals(images.osh.keystone.init, "registry.example.com/alpine@sha256:abc123");
-  assertEquals(images.osh.glance.init, "registry.example.com/alpine@sha256:abc123");
-  assertEquals(images.osh.nova.init, "registry.example.com/alpine@sha256:abc123");
-  assertEquals(images.osh.neutron.init, "registry.example.com/alpine@sha256:abc123");
+  expect(images.osh.keystone.init).toEqual("registry.example.com/alpine@sha256:abc123");
+  expect(images.osh.glance.init).toEqual("registry.example.com/alpine@sha256:abc123");
+  expect(images.osh.nova.init).toEqual("registry.example.com/alpine@sha256:abc123");
+  expect(images.osh.neutron.init).toEqual("registry.example.com/alpine@sha256:abc123");
 
   // All alias references to the same anchor produce the same value
-  assertEquals(images.osh.keystone.db, images.osh.glance.db);
-  assertEquals(images.osh.keystone.queue, images.osh.nova.queue);
+  expect(images.osh.keystone.db).toEqual(images.osh.glance.db);
+  expect(images.osh.keystone.queue).toEqual(images.osh.nova.queue);
 });
 
-Deno.test("YAML: anchors file round-trips through encode", async () => {
-  const input = await Deno.readTextFile("test/data/anchors.yaml");
+test("YAML: anchors file round-trips through encode", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/anchors.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
@@ -819,32 +811,32 @@ Deno.test("YAML: anchors file round-trips through encode", async () => {
   const redoc = reparsed.documents[0] as Record<string, unknown>;
   const data = redoc.data as any;
 
-  assertEquals(data.charts.osh.mariadb.subpath, "mariadb");
-  assertEquals(data.images.osh.keystone.init, "registry.example.com/alpine@sha256:abc123");
+  expect(data.charts.osh.mariadb.subpath).toEqual("mariadb");
+  expect(data.images.osh.keystone.init).toEqual("registry.example.com/alpine@sha256:abc123");
 });
 
-Deno.test("YAML: anchors file comments are preserved", async () => {
-  const input = await Deno.readTextFile("test/data/anchors.yaml");
+test("YAML: anchors file comments are preserved", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/anchors.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   // Document header
   const header = getComment(doc);
-  assertExists(header);
-  assertEquals(header!.before, "Software versions");
+  expect(header).toBeDefined();
+  expect(header!.before).toEqual("Software versions");
 
   // Nested comments
   const data = doc.data as Record<string, unknown>;
   const chartRefsComment = getComment(data, "chart_refs");
-  assertExists(chartRefsComment);
-  assertEquals(chartRefsComment!.before, "Chart references with anchors");
+  expect(chartRefsComment).toBeDefined();
+  expect(chartRefsComment!.before).toEqual("Chart references with anchors");
 });
 
 // ============================================================
 // YAML Anchor/Alias Preservation Tests
 // ============================================================
 
-Deno.test("YAML: scalar anchor is preserved in YAML output", () => {
+test("YAML: scalar anchor is preserved in YAML output", () => {
   const input = `
 images:
   common:
@@ -856,11 +848,11 @@ images:
   const doc = parsed.documents[0] as Record<string, unknown>;
   const output = YamlPlugin.encode(doc) as string;
 
-  assert(output.includes("&alpine"), "anchor &alpine should be present");
-  assert(output.includes("*alpine"), "alias *alpine should be present");
+  expect(output.includes("&alpine")).toBeTruthy();
+  expect(output.includes("*alpine")).toBeTruthy();
 });
 
-Deno.test("YAML: object anchor is preserved in YAML output", () => {
+test("YAML: object anchor is preserved in YAML output", () => {
   const input = `
 chart_refs:
   ingress-nginx: &ingress_chart
@@ -877,13 +869,13 @@ charts:
   const doc = parsed.documents[0] as Record<string, unknown>;
   const output = YamlPlugin.encode(doc) as string;
 
-  assert(output.includes("&ingress_chart"), "anchor &ingress_chart should be present");
+  expect(output.includes("&ingress_chart")).toBeTruthy();
   // Two alias references
   const aliasMatches = output.match(/\*ingress_chart/g);
-  assertEquals(aliasMatches?.length, 2, "should have 2 alias references");
+  expect(aliasMatches?.length).toEqual(2);
 });
 
-Deno.test("YAML: multiple anchors and aliases are all preserved", () => {
+test("YAML: multiple anchors and aliases are all preserved", () => {
   const input = `
 defs:
   foo: &foo value_foo
@@ -899,15 +891,15 @@ uses:
   const doc = parsed.documents[0] as Record<string, unknown>;
   const output = YamlPlugin.encode(doc) as string;
 
-  assert(output.includes("&foo"), "anchor &foo should be present");
-  assert(output.includes("&bar"), "anchor &bar should be present");
-  assert(output.includes("&baz"), "anchor &baz should be present");
-  assertEquals(output.match(/\*foo/g)?.length, 2, "should have 2 *foo aliases");
-  assertEquals(output.match(/\*bar/g)?.length, 1, "should have 1 *bar alias");
-  assertEquals(output.match(/\*baz/g)?.length, 1, "should have 1 *baz alias");
+  expect(output.includes("&foo")).toBeTruthy();
+  expect(output.includes("&bar")).toBeTruthy();
+  expect(output.includes("&baz")).toBeTruthy();
+  expect(output.match(/\*foo/g)?.length).toEqual(2);
+  expect(output.match(/\*bar/g)?.length).toEqual(1);
+  expect(output.match(/\*baz/g)?.length).toEqual(1);
 });
 
-Deno.test("YAML: anchor values are correct after decode", () => {
+test("YAML: anchor values are correct after decode", () => {
   const input = `
 defs:
   img: &img registry.example.com/app@sha256:abc
@@ -919,11 +911,11 @@ refs:
   const doc = parsed.documents[0] as Record<string, unknown>;
   const refs = (doc as any).refs;
 
-  assertEquals(refs.service_a, "registry.example.com/app@sha256:abc");
-  assertEquals(refs.service_b, "registry.example.com/app@sha256:abc");
+  expect(refs.service_a).toEqual("registry.example.com/app@sha256:abc");
+  expect(refs.service_b).toEqual("registry.example.com/app@sha256:abc");
 });
 
-Deno.test("YAML: anchor round-trip preserves data integrity", () => {
+test("YAML: anchor round-trip preserves data integrity", () => {
   const input = `
 defs:
   chart: &chart
@@ -942,11 +934,11 @@ uses:
   const reparsed = YamlPlugin.decode(output);
   const redoc = reparsed.documents[0] as Record<string, unknown>;
 
-  assertEquals((redoc as any).uses.first.location, "https://example.com/chart.tgz");
-  assertEquals((redoc as any).uses.second.subpath, "myapp");
+  expect((redoc as any).uses.first.location).toEqual("https://example.com/chart.tgz");
+  expect((redoc as any).uses.second.subpath).toEqual("myapp");
 });
 
-Deno.test("YAML: anchors with comments are both preserved", () => {
+test("YAML: anchors with comments are both preserved", () => {
   const input = `
 # Header
 defs:
@@ -960,14 +952,14 @@ refs:
   const output = YamlPlugin.encode(doc) as string;
 
   // Both anchors and comments should survive
-  assert(output.includes("&img"), "anchor should be preserved");
-  assert(output.includes("*img"), "alias should be preserved");
-  assert(output.includes("# Header"), "header comment should be preserved");
-  assert(output.includes("# The main image"), "key comment should be preserved");
+  expect(output.includes("&img")).toBeTruthy();
+  expect(output.includes("*img")).toBeTruthy();
+  expect(output.includes("# Header")).toBeTruthy();
+  expect(output.includes("# The main image")).toBeTruthy();
 });
 
-Deno.test("YAML: anchors file preserves all anchors and aliases on round-trip", async () => {
-  const input = await Deno.readTextFile("test/data/anchors.yaml");
+test("YAML: anchors file preserves all anchors and aliases on round-trip", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/anchors.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
   const output = YamlPlugin.encode(doc) as string;
@@ -977,11 +969,11 @@ Deno.test("YAML: anchors file preserves all anchors and aliases on round-trip", 
   const aliases = output.match(/\*\w+/g) || [];
 
   // The fixture has 12 anchors and many aliases
-  assert(anchors.length >= 12, `expected at least 12 anchors, got ${anchors.length}`);
-  assert(aliases.length >= 20, `expected at least 20 aliases, got ${aliases.length}`);
+  expect(anchors.length >= 12).toBeTruthy();
+  expect(aliases.length >= 20).toBeTruthy();
 });
 
-Deno.test("YAML: YAML without anchors is unaffected", () => {
+test("YAML: YAML without anchors is unaffected", () => {
   const input = `
 name: test
 version: 1
@@ -993,61 +985,61 @@ tags:
   const doc = parsed.documents[0] as Record<string, unknown>;
   const output = YamlPlugin.encode(doc) as string;
 
-  assert(!output.includes("&"), "no anchors should appear");
-  assert(!output.includes("*"), "no aliases should appear");
-  assert(output.includes("name: test"), "data should be intact");
+  expect(!output.includes("&")).toBeTruthy();
+  expect(!output.includes("*")).toBeTruthy();
+  expect(output.includes("name: test")).toBeTruthy();
 });
 
 // ============================================================
 // YAML Document Separator (---/...) Tests
 // ============================================================
 
-Deno.test("YAML: --- separator with header comment does not duplicate", async () => {
-  const input = await Deno.readTextFile("test/data/doc-separator.yaml");
+test("YAML: --- separator with header comment does not duplicate", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/doc-separator.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
   // Header comment should be on container only
   const header = getComment(doc);
-  assertExists(header);
-  assertEquals(header!.before, "High-level site definition");
+  expect(header).toBeDefined();
+  expect(header!.before).toEqual("High-level site definition");
 
   // First key should NOT have the header duplicated
   const schemaComment = getComment(doc, "schema");
-  assertEquals(schemaComment, undefined);
+  expect(schemaComment).toEqual(undefined);
 });
 
-Deno.test("YAML: --- separator preserves inline comments", async () => {
-  const input = await Deno.readTextFile("test/data/doc-separator.yaml");
+test("YAML: --- separator preserves inline comments", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/doc-separator.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
   const metadata = doc.metadata as Record<string, unknown>;
 
   const nameComment = getComment(metadata, "name");
-  assertExists(nameComment);
-  assertEquals(nameComment!.before, "Replace with the site name");
+  expect(nameComment).toBeDefined();
+  expect(nameComment!.before).toEqual("Replace with the site name");
 });
 
-Deno.test("YAML: --- separator file data values are correct", async () => {
-  const input = await Deno.readTextFile("test/data/doc-separator.yaml");
+test("YAML: --- separator file data values are correct", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/doc-separator.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
-  assertEquals(doc.schema, "pegleg/SiteDefinition/v1");
-  assertEquals((doc.metadata as any).name, "test-site");
-  assertEquals((doc.data as any).site_type, "cruiser");
+  expect(doc.schema).toEqual("pegleg/SiteDefinition/v1");
+  expect((doc.metadata as any).name).toEqual("test-site");
+  expect((doc.data as any).site_type).toEqual("cruiser");
 });
 
-Deno.test("YAML: ... end marker does not create extra documents", async () => {
-  const input = await Deno.readTextFile("test/data/doc-separator.yaml");
+test("YAML: ... end marker does not create extra documents", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/doc-separator.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
 
-  assertEquals(parsed.isMultiDocument, false);
-  assertEquals(parsed.documents.length, 1);
+  expect(parsed.isMultiDocument).toEqual(false);
+  expect(parsed.documents.length).toEqual(1);
 });
 
-Deno.test("YAML: --- header comment not duplicated in JSON output", async () => {
-  const input = await Deno.readTextFile("test/data/doc-separator.yaml");
+test("YAML: --- header comment not duplicated in JSON output", () => {
+  const input = fs.readFileSync(path.resolve(__dirname, "data/doc-separator.yaml"), "utf-8");
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
 
@@ -1055,10 +1047,10 @@ Deno.test("YAML: --- header comment not duplicated in JSON output", async () => 
 
   // Count occurrences of the header comment
   const matches = output.match(/High-level site definition/g);
-  assertEquals(matches?.length, 1, "Header comment should appear exactly once in JSON output");
+  expect(matches?.length).toEqual(1);
 });
 
-Deno.test("YAML: header comment not duplicated in JSON output (no --- separator)", () => {
+test("YAML: header comment not duplicated in JSON output (no --- separator)", () => {
   const input = "# Header comment\nname: John\nage: 30\n";
   const parsed = YamlPlugin.decode(input);
   const doc = parsed.documents[0] as Record<string, unknown>;
@@ -1066,214 +1058,214 @@ Deno.test("YAML: header comment not duplicated in JSON output (no --- separator)
   const output = JsonPlugin.encode(doc) as string;
 
   const matches = output.match(/Header comment/g);
-  assertEquals(matches?.length, 1, "Header comment should appear exactly once in JSON output");
+  expect(matches?.length).toEqual(1);
 });
 
 // ============================================================
 // Tracked Proxy .comment() / .commentAfter() Tests
 // ============================================================
 
-import { tracked } from "../src/replExtensions.ts";
+import { tracked } from "../src/replExtensions";
 
-Deno.test("tracked: .comment() reads existing before-comment on object member", () => {
+test("tracked: .comment() reads existing before-comment on object member", () => {
   const raw = { name: "John", age: 30 };
   setComment(raw, "name", { before: "Person name" });
   const data = tracked(raw) as any;
 
-  assertEquals(data.name.comment(), "Person name");
+  expect(data.name.comment()).toEqual("Person name");
 });
 
-Deno.test("tracked: .commentAfter() reads existing after-comment on object member", () => {
+test("tracked: .commentAfter() reads existing after-comment on object member", () => {
   const raw = { name: "John", age: 30 };
   setComment(raw, "name", { after: "inline note" });
   const data = tracked(raw) as any;
 
-  assertEquals(data.name.commentAfter(), "inline note");
+  expect(data.name.commentAfter()).toEqual("inline note");
 });
 
-Deno.test("tracked: .comment(text) sets before-comment on primitive member", () => {
+test("tracked: .comment(text) sets before-comment on primitive member", () => {
   const raw = { name: "John", age: 30 };
   const data = tracked(raw) as any;
 
   data.age.comment("years old");
-  assertEquals(getComment(raw, "age")?.before, "years old");
+  expect(getComment(raw, "age")?.before).toEqual("years old");
 });
 
-Deno.test("tracked: .commentAfter(text) sets after-comment on primitive member", () => {
+test("tracked: .commentAfter(text) sets after-comment on primitive member", () => {
   const raw = { name: "John", age: 30 };
   const data = tracked(raw) as any;
 
   data.age.commentAfter("years");
-  assertEquals(getComment(raw, "age")?.after, "years");
+  expect(getComment(raw, "age")?.after).toEqual("years");
 });
 
-Deno.test("tracked: .comment() on root returns container header", () => {
+test("tracked: .comment() on root returns container header", () => {
   const raw = { name: "John" };
   setComment(raw, "#", { before: "File header" });
   const data = tracked(raw) as any;
 
-  assertEquals(data.comment(), "File header");
+  expect(data.comment()).toEqual("File header");
 });
 
-Deno.test("tracked: .comment(text) on root sets container header", () => {
+test("tracked: .comment(text) on root sets container header", () => {
   const raw = { name: "John" };
   const data = tracked(raw) as any;
 
   data.comment("New header");
-  assertEquals(getComment(raw, "#")?.before, "New header");
+  expect(getComment(raw, "#")?.before).toEqual("New header");
 });
 
-Deno.test("tracked: .commentAfter() on root returns container trailer", () => {
+test("tracked: .commentAfter() on root returns container trailer", () => {
   const raw = { name: "John" };
   setComment(raw, "#", { after: "Trailing" });
   const data = tracked(raw) as any;
 
-  assertEquals(data.commentAfter(), "Trailing");
+  expect(data.commentAfter()).toEqual("Trailing");
 });
 
-Deno.test("tracked: .commentAfter(text) on root sets container trailer", () => {
+test("tracked: .commentAfter(text) on root sets container trailer", () => {
   const raw = { name: "John" };
   const data = tracked(raw) as any;
 
   data.commentAfter("End of file");
-  assertEquals(getComment(raw, "#")?.after, "End of file");
+  expect(getComment(raw, "#")?.after).toEqual("End of file");
 });
 
-Deno.test("tracked: nested object .comment() gets parent key comment", () => {
+test("tracked: nested object .comment() gets parent key comment", () => {
   const raw = { metadata: { name: "test" } };
   setComment(raw, "metadata", { before: "Metadata section" });
   const data = tracked(raw) as any;
 
-  assertEquals(data.metadata.comment(), "Metadata section");
+  expect(data.metadata.comment()).toEqual("Metadata section");
 });
 
-Deno.test("tracked: nested object .comment(text) sets parent key comment", () => {
+test("tracked: nested object .comment(text) sets parent key comment", () => {
   const raw = { metadata: { name: "test" } };
   const data = tracked(raw) as any;
 
   data.metadata.comment("Metadata section");
-  assertEquals(getComment(raw, "metadata")?.before, "Metadata section");
+  expect(getComment(raw, "metadata")?.before).toEqual("Metadata section");
 });
 
-Deno.test("tracked: deep chain data.a.b.c.comment()", () => {
+test("tracked: deep chain data.a.b.c.comment()", () => {
   const raw = { a: { b: { c: "value" } } };
   const data = tracked(raw) as any;
 
   data.a.b.c.comment("deep comment");
-  assertEquals(getComment(raw.a.b, "c")?.before, "deep comment");
-  assertEquals(data.a.b.c.comment(), "deep comment");
+  expect(getComment(raw.a.b, "c")?.before).toEqual("deep comment");
+  expect(data.a.b.c.comment()).toEqual("deep comment");
 });
 
-Deno.test("tracked: .comment() on string member", () => {
+test("tracked: .comment() on string member", () => {
   const raw = { url: "https://example.com" };
   const data = tracked(raw) as any;
 
   data.url.comment("API endpoint");
-  assertEquals(getComment(raw, "url")?.before, "API endpoint");
-  assertEquals(data.url.comment(), "API endpoint");
+  expect(getComment(raw, "url")?.before).toEqual("API endpoint");
+  expect(data.url.comment()).toEqual("API endpoint");
 });
 
-Deno.test("tracked: .comment() on boolean member", () => {
+test("tracked: .comment() on boolean member", () => {
   const raw = { enabled: true };
   const data = tracked(raw) as any;
 
   data.enabled.comment("Feature flag");
-  assertEquals(getComment(raw, "enabled")?.before, "Feature flag");
-  assertEquals(data.enabled.comment(), "Feature flag");
+  expect(getComment(raw, "enabled")?.before).toEqual("Feature flag");
+  expect(data.enabled.comment()).toEqual("Feature flag");
 });
 
-Deno.test("tracked: setting comment preserves existing after-comment", () => {
+test("tracked: setting comment preserves existing after-comment", () => {
   const raw = { age: 30 };
   setComment(raw, "age", { after: "years" });
   const data = tracked(raw) as any;
 
   data.age.comment("Person age");
-  assertEquals(getComment(raw, "age")?.before, "Person age");
-  assertEquals(getComment(raw, "age")?.after, "years");
+  expect(getComment(raw, "age")?.before).toEqual("Person age");
+  expect(getComment(raw, "age")?.after).toEqual("years");
 });
 
-Deno.test("tracked: setting commentAfter preserves existing before-comment", () => {
+test("tracked: setting commentAfter preserves existing before-comment", () => {
   const raw = { age: 30 };
   setComment(raw, "age", { before: "Person age" });
   const data = tracked(raw) as any;
 
   data.age.commentAfter("years");
-  assertEquals(getComment(raw, "age")?.before, "Person age");
-  assertEquals(getComment(raw, "age")?.after, "years");
+  expect(getComment(raw, "age")?.before).toEqual("Person age");
+  expect(getComment(raw, "age")?.after).toEqual("years");
 });
 
-Deno.test("tracked: returns undefined for members without comments", () => {
+test("tracked: returns undefined for members without comments", () => {
   const raw = { name: "John" };
   const data = tracked(raw) as any;
 
-  assertEquals(data.name.comment(), undefined);
-  assertEquals(data.name.commentAfter(), undefined);
+  expect(data.name.comment()).toEqual(undefined);
+  expect(data.name.commentAfter()).toEqual(undefined);
 });
 
-Deno.test("tracked: proxy is transparent for Object.keys", () => {
+test("tracked: proxy is transparent for Object.keys", () => {
   const raw = { a: 1, b: 2, c: 3 };
   const data = tracked(raw) as any;
 
-  assertEquals(Object.keys(data), ["a", "b", "c"]);
+  expect(Object.keys(data)).toEqual(["a", "b", "c"]);
 });
 
-Deno.test("tracked: proxy is transparent for JSON.stringify", () => {
+test("tracked: proxy is transparent for JSON.stringify", () => {
   const raw = { name: "John", age: 30 };
   const data = tracked(raw) as any;
 
-  assertEquals(JSON.stringify(data), '{"name":"John","age":30}');
+  expect(JSON.stringify(data)).toEqual('{"name":"John","age":30}');
 });
 
-Deno.test("tracked: proxy is transparent for Array.isArray", () => {
+test("tracked: proxy is transparent for Array.isArray", () => {
   const raw = { items: [1, 2, 3] };
   const data = tracked(raw) as any;
 
-  assertEquals(Array.isArray(data.items), true);
+  expect(Array.isArray(data.items)).toEqual(true);
 });
 
-Deno.test("tracked: proxy is transparent for Object.entries", () => {
+test("tracked: proxy is transparent for Object.entries", () => {
   const raw = { x: 10, y: 20 };
   const data = tracked(raw) as any;
 
-  assertEquals(Object.entries(data), [["x", 10], ["y", 20]]);
+  expect(Object.entries(data)).toEqual([["x", 10], ["y", 20]]);
 });
 
-Deno.test("tracked: proxy is transparent for property assignment", () => {
+test("tracked: proxy is transparent for property assignment", () => {
   const raw: Record<string, unknown> = { name: "John" };
   const data = tracked(raw) as any;
 
   data.name = "Jane";
-  assertEquals(raw.name, "Jane");
+  expect(raw.name).toEqual("Jane");
 });
 
-Deno.test("tracked: proxy is transparent for arithmetic on numbers", () => {
+test("tracked: proxy is transparent for arithmetic on numbers", () => {
   const raw = { age: 30 };
   const data = tracked(raw) as any;
 
-  assertEquals(data.age + 1, 31);
-  assertEquals(data.age * 2, 60);
-  assertEquals(data.age > 18, true);
+  expect(data.age + 1).toEqual(31);
+  expect(data.age * 2).toEqual(60);
+  expect(data.age > 18).toEqual(true);
 });
 
-Deno.test("tracked: array element .comment()", () => {
+test("tracked: array element .comment()", () => {
   const raw = { items: ["a", "b", "c"] };
   const data = tracked(raw) as any;
 
   data.items[1].comment("second item");
-  assertEquals(getComment(raw.items, "1")?.before, "second item");
-  assertEquals(data.items[1].comment(), "second item");
+  expect(getComment(raw.items, "1")?.before).toEqual("second item");
+  expect(data.items[1].comment()).toEqual("second item");
 });
 
-Deno.test("tracked: object .comment() returns proxy for chaining", () => {
+test("tracked: object .comment() returns proxy for chaining", () => {
   const raw = { metadata: { name: "test" } };
   const data = tracked(raw) as any;
 
   const result = data.metadata.comment("section");
   // Should return the proxy, allowing further access
-  assertEquals(result.name, "test");
+  expect(result.name).toEqual("test");
 });
 
-Deno.test("tracked: round-trip with YAML encode preserves set comments", () => {
+test("tracked: round-trip with YAML encode preserves set comments", () => {
   const input = "name: John\nage: 30\n";
   const parsed = YamlPlugin.decode(input);
   const raw = parsed.documents[0] as Record<string, unknown>;
@@ -1284,16 +1276,16 @@ Deno.test("tracked: round-trip with YAML encode preserves set comments", () => {
   data.age.comment("Age in years");
 
   const output = YamlPlugin.encode(raw) as string;
-  assertEquals(output.includes("# Person record"), true);
-  assertEquals(output.includes("# first name"), true);
-  assertEquals(output.includes("# Age in years"), true);
+  expect(output.includes("# Person record")).toEqual(true);
+  expect(output.includes("# first name")).toEqual(true);
+  expect(output.includes("# Age in years")).toEqual(true);
 });
 
 // ============================================================
 // Tracked Proxy .anchor() / .alias() Tests
 // ============================================================
 
-Deno.test("tracked: .anchor() reads existing anchor name from YAML", () => {
+test("tracked: .anchor() reads existing anchor name from YAML", () => {
   const input = `
 defs:
   img: &my_anchor registry.example.com/app
@@ -1304,10 +1296,10 @@ refs:
   const raw = parsed.documents[0] as Record<string, unknown>;
   const data = tracked(raw) as any;
 
-  assertEquals(data.defs.img.anchor(), "my_anchor");
+  expect(data.defs.img.anchor()).toEqual("my_anchor");
 });
 
-Deno.test("tracked: .alias() reads existing alias reference from YAML", () => {
+test("tracked: .alias() reads existing alias reference from YAML", () => {
   const input = `
 defs:
   img: &my_anchor registry.example.com/app
@@ -1318,20 +1310,20 @@ refs:
   const raw = parsed.documents[0] as Record<string, unknown>;
   const data = tracked(raw) as any;
 
-  assertEquals(data.refs.svc.alias(), "my_anchor");
+  expect(data.refs.svc.alias()).toEqual("my_anchor");
 });
 
-Deno.test("tracked: .anchor() returns undefined when no anchor", () => {
+test("tracked: .anchor() returns undefined when no anchor", () => {
   const input = "name: John\nage: 30\n";
   const parsed = YamlPlugin.decode(input);
   const raw = parsed.documents[0] as Record<string, unknown>;
   const data = tracked(raw) as any;
 
-  assertEquals(data.name.anchor(), undefined);
-  assertEquals(data.age.anchor(), undefined);
+  expect(data.name.anchor()).toEqual(undefined);
+  expect(data.age.anchor()).toEqual(undefined);
 });
 
-Deno.test("tracked: .alias() returns undefined when not an alias", () => {
+test("tracked: .alias() returns undefined when not an alias", () => {
   const input = `
 defs:
   img: &my_anchor registry.example.com/app
@@ -1340,35 +1332,35 @@ defs:
   const raw = parsed.documents[0] as Record<string, unknown>;
   const data = tracked(raw) as any;
 
-  assertEquals(data.defs.img.alias(), undefined);
+  expect(data.defs.img.alias()).toEqual(undefined);
 });
 
-Deno.test("tracked: .anchor(name) sets anchor on a value", () => {
+test("tracked: .anchor(name) sets anchor on a value", () => {
   const raw = { defs: { img: "registry.example.com/app" }, refs: { svc: "registry.example.com/app" } };
   const data = tracked(raw) as any;
 
   data.defs.img.anchor("my_img");
-  assertEquals(data.defs.img.anchor(), "my_img");
+  expect(data.defs.img.anchor()).toEqual("my_img");
 
   const output = YamlPlugin.encode(raw) as string;
-  assert(output.includes("&my_img"));
+  expect(output.includes("&my_img")).toBeTruthy();
 });
 
-Deno.test("tracked: .alias(name) sets alias on a value", () => {
+test("tracked: .alias(name) sets alias on a value", () => {
   const raw = { defs: { img: "registry.example.com/app" }, refs: { svc: "registry.example.com/app" } };
   const data = tracked(raw) as any;
 
   data.defs.img.anchor("my_img");
   data.refs.svc.alias("my_img");
 
-  assertEquals(data.refs.svc.alias(), "my_img");
+  expect(data.refs.svc.alias()).toEqual("my_img");
 
   const output = YamlPlugin.encode(raw) as string;
-  assert(output.includes("&my_img"));
-  assert(output.includes("*my_img"));
+  expect(output.includes("&my_img")).toBeTruthy();
+  expect(output.includes("*my_img")).toBeTruthy();
 });
 
-Deno.test("tracked: .anchor() on object value reads anchor", () => {
+test("tracked: .anchor() on object value reads anchor", () => {
   const input = `
 chart_refs:
   nginx: &nginx_chart
@@ -1381,32 +1373,32 @@ charts:
   const raw = parsed.documents[0] as Record<string, unknown>;
   const data = tracked(raw) as any;
 
-  assertEquals(data.chart_refs.nginx.anchor(), "nginx_chart");
-  assertEquals(data.charts.web.alias(), "nginx_chart");
+  expect(data.chart_refs.nginx.anchor()).toEqual("nginx_chart");
+  expect(data.charts.web.alias()).toEqual("nginx_chart");
 });
 
-Deno.test("tracked: setting anchor clears alias and vice versa", () => {
+test("tracked: setting anchor clears alias and vice versa", () => {
   const raw = { a: "val" };
   const data = tracked(raw) as any;
 
   data.a.anchor("x");
-  assertEquals(data.a.anchor(), "x");
-  assertEquals(data.a.alias(), undefined);
+  expect(data.a.anchor()).toEqual("x");
+  expect(data.a.alias()).toEqual(undefined);
 
   data.a.alias("y");
-  assertEquals(data.a.alias(), "y");
-  assertEquals(data.a.anchor(), undefined);
+  expect(data.a.alias()).toEqual("y");
+  expect(data.a.anchor()).toEqual(undefined);
 });
 
-Deno.test("tracked: .anchor() and .alias() work on primitive number", () => {
+test("tracked: .anchor() and .alias() work on primitive number", () => {
   const raw = { port: 8080 };
   const data = tracked(raw) as any;
 
   data.port.anchor("default_port");
-  assertEquals(data.port.anchor(), "default_port");
+  expect(data.port.anchor()).toEqual("default_port");
 });
 
-Deno.test("tracked: aqAnchors() returns full anchor map", () => {
+test("tracked: aqAnchors() returns full anchor map", () => {
   const input = `
 defs:
   a: &anchor_a value_a
@@ -1420,17 +1412,17 @@ refs:
   const data = tracked(raw) as any;
 
   const defs = data.defs.aqAnchors();
-  assertExists(defs);
-  assertEquals(defs.a.anchor, "anchor_a");
-  assertEquals(defs.b.anchor, "anchor_b");
+  expect(defs).toBeDefined();
+  expect(defs.a.anchor).toEqual("anchor_a");
+  expect(defs.b.anchor).toEqual("anchor_b");
 
   const refs = data.refs.aqAnchors();
-  assertExists(refs);
-  assertEquals(refs.x.alias, "anchor_a");
-  assertEquals(refs.y.alias, "anchor_b");
+  expect(refs).toBeDefined();
+  expect(refs.x.alias).toEqual("anchor_a");
+  expect(refs.y.alias).toEqual("anchor_b");
 });
 
-Deno.test("tracked: aqAnchors(key) returns single entry", () => {
+test("tracked: aqAnchors(key) returns single entry", () => {
   const input = `
 defs:
   img: &my_img value
@@ -1440,11 +1432,11 @@ defs:
   const data = tracked(raw) as any;
 
   const entry = data.defs.aqAnchors("img");
-  assertExists(entry);
-  assertEquals(entry.anchor, "my_img");
+  expect(entry).toBeDefined();
+  expect(entry.anchor).toEqual("my_img");
 });
 
-Deno.test("tracked: round-trip YAML preserves anchors set via .anchor()/.alias()", () => {
+test("tracked: round-trip YAML preserves anchors set via .anchor()/.alias()", () => {
   const raw = {
     defs: { img: "registry.example.com/app@sha256:abc" },
     services: { web: "registry.example.com/app@sha256:abc", api: "registry.example.com/app@sha256:abc" },
@@ -1456,21 +1448,21 @@ Deno.test("tracked: round-trip YAML preserves anchors set via .anchor()/.alias()
   data.services.api.alias("app_img");
 
   const output = YamlPlugin.encode(raw) as string;
-  assert(output.includes("&app_img"), "anchor should appear");
-  assertEquals(output.match(/\*app_img/g)?.length, 2, "should have 2 aliases");
+  expect(output.includes("&app_img")).toBeTruthy();
+  expect(output.match(/\*app_img/g)?.length).toEqual(2);
 
   // Re-parse and verify data is still correct
   const reparsed = YamlPlugin.decode(output);
   const redoc = reparsed.documents[0] as Record<string, unknown>;
-  assertEquals((redoc as any).services.web, "registry.example.com/app@sha256:abc");
-  assertEquals((redoc as any).services.api, "registry.example.com/app@sha256:abc");
+  expect((redoc as any).services.web).toEqual("registry.example.com/app@sha256:abc");
+  expect((redoc as any).services.api).toEqual("registry.example.com/app@sha256:abc");
 });
 
 // ============================================================
 // YAML Deep Nesting Comment Round-trip Tests
 // ============================================================
 
-Deno.test("YAML: deeply nested comments survive round-trip", () => {
+test("YAML: deeply nested comments survive round-trip", () => {
   const input = `root:
   level1:
     # comment on deep key
@@ -1480,10 +1472,10 @@ Deno.test("YAML: deeply nested comments survive round-trip", () => {
   const doc = parsed.documents[0] as Record<string, unknown>;
   const output = YamlPlugin.encode(doc) as string;
 
-  assert(output.includes("# comment on deep key"), "deep comment should survive");
+  expect(output.includes("# comment on deep key")).toBeTruthy();
 });
 
-Deno.test("YAML: comments on multiple nesting levels survive round-trip", () => {
+test("YAML: comments on multiple nesting levels survive round-trip", () => {
   const input = `# header
 root:
   # level 1 comment
@@ -1495,12 +1487,12 @@ root:
   const doc = parsed.documents[0] as Record<string, unknown>;
   const output = YamlPlugin.encode(doc) as string;
 
-  assert(output.includes("# header"), "header comment should survive");
-  assert(output.includes("# level 1 comment"), "level 1 comment should survive");
-  assert(output.includes("# level 2 comment"), "level 2 comment should survive");
+  expect(output.includes("# header")).toBeTruthy();
+  expect(output.includes("# level 1 comment")).toBeTruthy();
+  expect(output.includes("# level 2 comment")).toBeTruthy();
 });
 
-Deno.test("YAML: parent without comments does not block child comment extraction", () => {
+test("YAML: parent without comments does not block child comment extraction", () => {
   // The root and 'wrapper' have no comments, but 'inner' does
   const input = `wrapper:
   inner:
@@ -1512,15 +1504,15 @@ Deno.test("YAML: parent without comments does not block child comment extraction
 
   const inner = (doc as any).wrapper.inner;
   const comment = getComment(inner, "key");
-  assertExists(comment, "comment on deeply nested key should be extracted");
-  assertEquals(comment!.before, "important note");
+  expect(comment).toBeDefined();
+  expect(comment!.before).toEqual("important note");
 
   // Round-trip: comment should appear in output
   const output = YamlPlugin.encode(doc) as string;
-  assert(output.includes("# important note"), "deep comment should survive round-trip");
+  expect(output.includes("# important note")).toBeTruthy();
 });
 
-Deno.test("YAML: trailing comment on nested map is preserved", () => {
+test("YAML: trailing comment on nested map is preserved", () => {
   const input = `outer:
   inner:
     a: 1
@@ -1534,15 +1526,15 @@ Deno.test("YAML: trailing comment on nested map is preserved", () => {
   // The trailing comment should be stored on inner object as "#" after
   const inner = (doc as any).outer.inner;
   const containerComment = getComment(inner, "#");
-  assertExists(containerComment, "trailing comment should be captured");
-  assertEquals(containerComment!.after, "trailing note");
+  expect(containerComment).toBeDefined();
+  expect(containerComment!.after).toEqual("trailing note");
 
   // Round-trip
   const output = YamlPlugin.encode(doc) as string;
-  assert(output.includes("# trailing note"), "trailing comment should survive round-trip");
+  expect(output.includes("# trailing note")).toBeTruthy();
 });
 
-Deno.test("YAML: empty comment line is preserved in round-trip", () => {
+test("YAML: empty comment line is preserved in round-trip", () => {
   const input = `items:
   # section header
   #
@@ -1556,17 +1548,17 @@ Deno.test("YAML: empty comment line is preserved in round-trip", () => {
   // The comment on 'first' should include both lines (header + empty)
   const items = (doc as any).items;
   const firstComment = getComment(items, "first");
-  assertExists(firstComment);
+  expect(firstComment).toBeDefined();
   // The empty # line is preserved as an empty line in the comment text
-  assert(firstComment!.before!.includes("section header"), "should have section header");
-  assert(firstComment!.before!.includes("\n"), "should have newline for empty comment line");
+  expect(firstComment!.before!.includes("section header")).toBeTruthy();
+  expect(firstComment!.before!.includes("\n")).toBeTruthy();
 
   // Round-trip: both comment lines should appear
   const output = YamlPlugin.encode(doc) as string;
-  assert(output.includes("# section header"), "section header should survive");
+  expect(output.includes("# section header")).toBeTruthy();
 });
 
-Deno.test("YAML: inline (after) comments on deeply nested scalars survive", () => {
+test("YAML: inline (after) comments on deeply nested scalars survive", () => {
   const input = `config:
   database:
     host: localhost # primary host
@@ -1576,6 +1568,93 @@ Deno.test("YAML: inline (after) comments on deeply nested scalars survive", () =
   const doc = parsed.documents[0] as Record<string, unknown>;
   const output = YamlPlugin.encode(doc) as string;
 
-  assert(output.includes("# primary host"), "inline comment on host should survive");
-  assert(output.includes("# default port"), "inline comment on port should survive");
+  expect(output.includes("# primary host")).toBeTruthy();
+  expect(output.includes("# default port")).toBeTruthy();
+});
+
+// ============================================================
+// Library API Tests (parse / encode)
+// ============================================================
+
+import { parse, encode } from "../src/index";
+
+test("parse: auto-detects YAML format", () => {
+  const data = parse("name: John\nage: 30\n") as any;
+  expect(data.name).toEqual("John");
+  expect(data.age).toEqual(30);
+});
+
+test("parse: explicit YAML format", () => {
+  const data = parse("name: Jane\n", "yaml") as any;
+  expect(data.name).toEqual("Jane");
+});
+
+test("parse: explicit JSON format", () => {
+  const data = parse('{"name": "Bob"}', "json") as any;
+  expect(data.name).toEqual("Bob");
+});
+
+test("parse: auto-detects JSON format", () => {
+  const data = parse('{"key": "value"}') as any;
+  expect(data.key).toEqual("value");
+});
+
+test("parse: preserves YAML comments", () => {
+  const data = parse("# Header\nname: John\n", "yaml");
+  expect(hasComments(data as object)).toEqual(true);
+  const header = getComment(data as object);
+  expect(header).toBeDefined();
+  expect(header!.before).toEqual("Header");
+});
+
+test("parse: throws on unknown format", () => {
+  expect(() => parse("data", "unknownformat")).toThrow("Unknown format");
+});
+
+test("encode: YAML format", () => {
+  const output = encode({ name: "John", age: 30 }, "yaml");
+  expect(output).toContain("name: John");
+  expect(output).toContain("age: 30");
+});
+
+test("encode: JSON format", () => {
+  const output = encode({ name: "John" }, "json");
+  expect(JSON.parse(output).name).toEqual("John");
+});
+
+test("encode: throws on unknown format", () => {
+  expect(() => encode({}, "unknownformat")).toThrow("Unknown format");
+});
+
+test("parse + encode: YAML round-trip preserves comments", () => {
+  const input = "# Header\nname: John  # inline\n# before age\nage: 30\n";
+  const data = parse(input, "yaml");
+  const output = encode(data, "yaml");
+  expect(output).toContain("# Header");
+  expect(output).toContain("# inline");
+  expect(output).toContain("# before age");
+});
+
+test("parse + encode: JSONC round-trip preserves comments", () => {
+  const input = '{\n  // Person name\n  "name": "John",\n  "age": 30  // inline\n}';
+  const data = parse(input, "json");
+  const output = encode(data, "json");
+  expect(output).toContain("// Person name");
+  expect(output).toContain("// inline");
+});
+
+test("parse + encode: TOML format", () => {
+  const input = "# Header\ntitle = \"test\"  # inline\n";
+  const data = parse(input, "toml");
+  const output = encode(data, "toml");
+  expect(output).toContain("# Header");
+  expect(output).toContain("# inline");
+});
+
+test("parse: YAML multi-doc returns array", () => {
+  const input = "---\nname: John\n---\nname: Jane\n";
+  const data = parse(input, "yaml") as any[];
+  expect(Array.isArray(data)).toEqual(true);
+  expect(data[0].name).toEqual("John");
+  expect(data[1].name).toEqual("Jane");
 });

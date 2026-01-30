@@ -1,11 +1,11 @@
-import { AqPlugin } from "../infrastructure/aqPlugin.ts";
-import { ParsedData } from "../infrastructure/ParsedData.ts";
+import { AqPlugin } from "../infrastructure/aqPlugin";
+import { ParsedData } from "../infrastructure/ParsedData";
 import {
   type CommentEntry,
   getComment,
   hasComments,
   setComment,
-} from "../infrastructure/comments.ts";
+} from "../infrastructure/comments";
 
 /**
  * Custom INI parser with native comment support.

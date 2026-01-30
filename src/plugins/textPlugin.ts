@@ -1,5 +1,5 @@
-import { AqPlugin } from "../infrastructure/aqPlugin.ts";
-import { ParsedData } from "../infrastructure/ParsedData.ts";
+import { AqPlugin } from "../infrastructure/aqPlugin";
+import { ParsedData } from "../infrastructure/ParsedData";
 
 export const TextPlugin: AqPlugin = {
   name: "TEXT",

@@ -1,13 +1,10 @@
-import { AqPlugin } from "../infrastructure/aqPlugin.ts";
-import {
-  parse as parseXml,
-  stringify as stringifyXml,
-} from "https://deno.land/x/xml/mod.ts";
-import { ParsedData } from "../infrastructure/ParsedData.ts";
-import { setComment } from "../infrastructure/comments.ts";
+import { AqPlugin } from "../infrastructure/aqPlugin";
+import { XMLParser, XMLBuilder } from "fast-xml-parser";
+import { ParsedData } from "../infrastructure/ParsedData";
+import { setComment } from "../infrastructure/comments";
 import {
   reinsertCommentsDeep,
-} from "../infrastructure/commentReinserter.ts";
+} from "../infrastructure/commentReinserter";
 
 /**
  * Walk the parsed XML tree and convert native #comments arrays
@@ -17,9 +14,16 @@ function extractNativeXmlComments(obj: unknown): void {
   if (!obj || typeof obj !== "object") return;
 
   const record = obj as Record<string, unknown>;
-  const comments = record["#comments"] as string[] | undefined;
+  const raw = record["#comments"];
 
-  if (Array.isArray(comments) && comments.length > 0) {
+  // fast-xml-parser returns a string for single comments, array for multiple
+  const comments: string[] | undefined = raw === undefined
+    ? undefined
+    : Array.isArray(raw)
+    ? raw
+    : [String(raw)];
+
+  if (comments && comments.length > 0) {
     // Get child element keys (exclude #comments and text nodes)
     const childKeys = Object.keys(record).filter(
       (k) => !k.startsWith("#"),
@@ -76,7 +80,13 @@ export const XmlPlugin: AqPlugin = {
   },
 
   decode: (input: string): ParsedData => {
-    const parsed = parseXml(input);
+    const xmlParser = new XMLParser({
+      ignoreAttributes: false,
+      commentPropName: "#comments",
+      preserveOrder: false,
+      trimValues: true,
+    });
+    const parsed = xmlParser.parse(input);
     extractNativeXmlComments(parsed);
     return new ParsedData([parsed], { sourceFormat: "XML" });
   },
@@ -90,7 +100,13 @@ export const XmlPlugin: AqPlugin = {
     if (data === null) {
       return "";
     }
-    let output = stringifyXml(data as Record<string, unknown>);
+    const xmlBuilder = new XMLBuilder({
+      ignoreAttributes: false,
+      format: true,
+      indentBy: "  ",
+      suppressEmptyNode: true,
+    });
+    let output = xmlBuilder.build(data as Record<string, unknown>);
     output = reinsertCommentsDeep(output, data, "xml", xmlKeyExtractor);
     return output;
   },

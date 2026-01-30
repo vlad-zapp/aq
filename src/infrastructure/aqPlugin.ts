@@ -1,4 +1,4 @@
-import { ParsedData } from "./ParsedData.ts";
+import { ParsedData } from "./ParsedData";
 
 export interface AqPlugin {
   name: string; // Plugin name (e.g., "JSON", "YAML", "Database")

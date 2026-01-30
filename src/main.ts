@@ -1,17 +1,22 @@
-import { Command } from "https://deno.land/x/cliffy@v1.0.0-rc.4/command/mod.ts";
-import { AqPlugin } from "./infrastructure/aqPlugin.ts";
-import { JsonPlugin } from "./plugins/jsonPlugin.ts";
-import { YamlPlugin } from "./plugins/yamlPlugin.ts";
-import { XmlPlugin } from "./plugins/xmlPlugin.ts";
-import { TomlPlugin } from "./plugins/tomlPlugin.ts";
-import { IniPlugin } from "./plugins/iniPlugin.ts";
-import { TextPlugin, PlainTextPlugin } from "./plugins/textPlugin.ts";
-import { MiniRepl } from "./repl.ts";
-import { detectPlugin, getErrorMessage, unwrapParsedData } from "./utils.ts";
-import { version } from "../version.ts";
-import { ParsedData } from "./infrastructure/ParsedData.ts";
-import { hasComments } from "./infrastructure/comments.ts";
-import { startWebServer } from "./webui/webServer.ts";
+#!/usr/bin/env node
+import { Command } from "commander";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { spawn } from "node:child_process";
+import { AqPlugin } from "./infrastructure/aqPlugin";
+import { JsonPlugin } from "./plugins/jsonPlugin";
+import { YamlPlugin } from "./plugins/yamlPlugin";
+import { XmlPlugin } from "./plugins/xmlPlugin";
+import { TomlPlugin } from "./plugins/tomlPlugin";
+import { IniPlugin } from "./plugins/iniPlugin";
+import { TextPlugin, PlainTextPlugin } from "./plugins/textPlugin";
+import { MiniRepl } from "./repl";
+import { detectPlugin, getErrorMessage, unwrapParsedData } from "./utils";
+import { version } from "../version";
+import { ParsedData } from "./infrastructure/ParsedData";
+import { hasComments } from "./infrastructure/comments";
+import { startWebServer } from "./webui/webServer";
 
 // Register plugins
 const plugins: AqPlugin[] = [
@@ -36,19 +41,19 @@ function queryNodes(data: unknown, query: string): unknown {
 }
 
 // CLI definition
-const cliCommand = new Command()
+const program = new Command()
   .name("aq")
   .version(version)
   .description("Aq: A universal query tool for structured data (like jq + yq).\n\n"
     + `Supported formats: ${plugins.map((plugin) => plugin.name).join(", ")}.\n`
     + "Input data piping is available (but not supported w/interactive mode on Windows).\n")
-  .arguments("[files:string]")
+  .argument("[files]", "Input files (comma-separated)")
   .option(
-    "-o, --output-format <format:string>",
+    "-o, --output-format <format>",
     "Output format (e.g., JSON, YAML, TEXT). Defaults to the input format.",
   )
   .option(
-    "-q, --query <query:string>",
+    "-q, --query <query>",
     "JavaScript query to apply to the data.",
   )
   .option(
@@ -64,14 +69,23 @@ const cliCommand = new Command()
     "Start a web server to display data as a tree with filtering capabilities.",
   )
   .option(
-    "-i, --input-format <format:string>",
+    "-i, --input-format <format>",
     "Input format (e.g., JSON, YAML, XML, etc.). Useful for piped input or overriding auto-detection.",
   )
   .action(
     async (
-      { query, interactive, interactiveWithOutput, webui, outputFormat, inputFormat },
       files: string | undefined,
+      options: {
+        query?: string;
+        interactive?: boolean;
+        interactiveWithOutput?: boolean;
+        webui?: boolean;
+        outputFormat?: string;
+        inputFormat?: string;
+      },
     ) => {
+      const { query, interactive, interactiveWithOutput, webui, outputFormat, inputFormat } = options;
+
       // Validate mutually exclusive options
       const exclusiveOptions = [
         { name: "-q/--query", value: query },
@@ -85,14 +99,13 @@ const cliCommand = new Command()
         console.error(
           `❌ The following options are mutually exclusive and cannot be used together: ${activeOptions.map((opt) => opt.name).join(", ")}`,
         );
-        Deno.exit(1);
+        process.exit(1);
       }
 
       const context = { query, interactive, interactiveWithOutput, outputFormat };
 
-      if (!files && Deno.stdin.isTerminal()) {
-        await cliCommand.showHelp();
-        Deno.exit(1);
+      if (!files && process.stdin.isTTY) {
+        program.help();
       }
 
       const data: ParsedData[] = [];
@@ -135,19 +148,19 @@ const cliCommand = new Command()
 
             if (!inputPlugin) {
               console.error(`❌ Unknown input format: ${inputFormat}`);
-              Deno.exit(1);
+              process.exit(1);
             }
           }
 
           // Read the file content
-          const input = await Deno.readTextFile(filePath);
+          const input = await fs.promises.readFile(filePath, "utf-8");
 
           // Auto-detect the plugin if not explicitly specified
           if (!inputPlugin) {
             inputPlugin = detectPlugin(plugins, filePath, input, context);
             if (!inputPlugin) {
               console.error(`❌ Could not detect input format for file: ${filePath}`);
-              Deno.exit(1);
+              process.exit(1);
             }
           }
 
@@ -159,7 +172,7 @@ const cliCommand = new Command()
             console.error(
               `❌ Error decoding input with plugin ${inputPlugin.name}: ${getErrorMessage(error)}`,
             );
-            Deno.exit(1);
+            process.exit(1);
           }
         }
 
@@ -169,39 +182,56 @@ const cliCommand = new Command()
           if (files) {
             result = await new MiniRepl().start(cleanData);
           } else {
-            if (Deno.build.os === "windows" && !Deno.stdin.isTerminal()) {
+            if (process.platform === "win32" && !process.stdin.isTTY) {
               console.error(
                 "❌ Sorry, interactive mode is not supported on Windows when reading from stdin.",
               );
-              Deno.exit(1);
+              process.exit(1);
             }
 
             // If no file is provided, save stdin to temp file
             // and run aq for it in a new shell with real tty.
-            // This is a workaround for Deno limitations.
-            const tempFile = await Deno.makeTempFile({ suffix: ".aq" });
-            await Deno.writeTextFile(tempFile, await new Response(Deno.stdin.readable).text());
+            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "aq-"));
+            const tempFile = path.join(tmpDir, "input.aq");
 
-            const quotedArgs = [tempFile, ...Deno.args].map((x) =>
+            // Read stdin to string
+            const chunks: Buffer[] = [];
+            for await (const chunk of process.stdin) {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            }
+            const stdinText = Buffer.concat(chunks).toString("utf-8");
+            await fs.promises.writeFile(tempFile, stdinText);
+
+            const quotedArgs = [tempFile, ...process.argv.slice(2)].map((x) =>
               JSON.stringify(x)
             ).join(" ");
 
-            const cmd = new Deno.Command("sh", {
-              args: [
-                "-c",
-                `exec 3>&1 && exec </dev/tty && exec ${Deno.execPath()} ${quotedArgs} >&3`,
-              ],
-              stdout: "piped",
-              stderr: "inherit",
-              stdin: "null",
+            const cmd = spawn("sh", [
+              "-c",
+              `exec 3>&1 && exec </dev/tty && exec ${process.execPath} ${JSON.stringify(process.argv[1])} ${quotedArgs} >&3`,
+            ], {
+              stdio: ["ignore", "pipe", "inherit"],
             });
 
-            const result = await cmd.output();
-            Deno.removeSync(tempFile, { recursive: false });
+            let stdout = "";
+            cmd.stdout.on("data", (chunk: Buffer) => {
+              stdout += chunk.toString();
+            });
+
+            await new Promise<void>((resolve) => {
+              cmd.on("close", () => resolve());
+            });
+
+            try {
+              fs.unlinkSync(tempFile);
+              fs.rmdirSync(tmpDir);
+            } catch {
+              // Ignore cleanup errors
+            }
 
             // Decode the output, remove trailing newline because of `sh` behavior
-            console.log(new TextDecoder().decode(result.stdout).replace(/\r?\n$/, ""));
-            Deno.exit(0);
+            console.log(stdout.replace(/\r?\n$/, ""));
+            process.exit(0);
           }
         } else if (webui) {
           await startWebServer(cleanData);
@@ -223,7 +253,7 @@ const cliCommand = new Command()
             console.error(
               `❌ Could not find plugin for output format: ${outputFormat}`,
             );
-            Deno.exit(1);
+            process.exit(1);
           }
 
           // Warn if comments will be lost
@@ -246,9 +276,9 @@ const cliCommand = new Command()
         }
       } catch (error) {
         console.error("❌ Error:", getErrorMessage(error));
-        Deno.exit(1);
+        process.exit(1);
       }
     },
   );
 
-await cliCommand.parse(Deno.args);
+program.parseAsync(process.argv);

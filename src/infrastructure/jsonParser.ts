@@ -5,7 +5,7 @@
  * Comments are attached to the resulting objects/arrays via setComment().
  */
 
-import { type CommentEntry, getComment, setComment } from "./comments.ts";
+import { type CommentEntry, getComment, setComment } from "./comments";
 
 export function parseJson(input: string): unknown {
   const parser = new JsonParser(input);
