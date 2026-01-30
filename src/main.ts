@@ -117,6 +117,42 @@ const program = new Command()
           ? files.split(",").map((file) => file.trim())
           : [];
 
+        // If no files and stdin is piped (non-interactive), read stdin as input
+        if (fileList.length === 0 && !process.stdin.isTTY && !interactive && !interactiveWithOutput) {
+          const chunks: Buffer[] = [];
+          for await (const chunk of process.stdin) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+          const stdinText = Buffer.concat(chunks).toString("utf-8");
+
+          let inputPlugin: AqPlugin | undefined;
+          if (inputFormat) {
+            inputPlugin = plugins.find(
+              (plugin) => plugin.name.toLowerCase() === inputFormat.toLowerCase(),
+            );
+            if (!inputPlugin) {
+              console.error(`❌ Unknown input format: ${inputFormat}`);
+              process.exit(1);
+            }
+          } else {
+            inputPlugin = detectPlugin(plugins, undefined, stdinText, context);
+            if (!inputPlugin) {
+              console.error("❌ Could not detect input format from stdin");
+              process.exit(1);
+            }
+          }
+
+          try {
+            const parsedData = inputPlugin.decode(stdinText, { ...context, inputFormat: inputFormat || "" });
+            data.push(parsedData);
+          } catch (error) {
+            console.error(
+              `❌ Error decoding stdin with plugin ${inputPlugin.name}: ${getErrorMessage(error)}`,
+            );
+            process.exit(1);
+          }
+        }
+
         // Read and process each file
         for (const fileEntry of fileList) {
           let inputPlugin: AqPlugin | undefined;

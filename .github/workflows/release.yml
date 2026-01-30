@@ -54,11 +54,11 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Package release artifact
-        run: |
-          mkdir -p aq-${{ github.ref_name }}
-          cp -r dist package.json node_modules aq-${{ github.ref_name }}/
-          tar czf aq-${{ github.ref_name }}.tar.gz aq-${{ github.ref_name }}
+      - name: Build standalone binaries
+        run: npx @yao-pkg/pkg dist/src/main.js --targets node20-linux-x64,node20-macos-x64,node20-macos-arm64,node20-win-x64 --output release/aq
+
+      - name: Rename Windows binary
+        run: mv release/aq-win-x64.exe release/aq-windows-x64.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -66,13 +66,22 @@ jobs:
           body: |
             Release ${{ github.ref_name }}
 
-            ### Usage
-            Download and extract, then run:
-            ```bash
-            node aq-${{ github.ref_name }}/dist/src/main.js [file] [options]
-            ```
-            Or install globally from npm: `npm install -g aq`
+            ### Download
+            | Platform | Binary |
+            |----------|--------|
+            | Linux x64 | `aq-linux-x64` |
+            | macOS x64 | `aq-macos-x64` |
+            | macOS ARM64 | `aq-macos-arm64` |
+            | Windows x64 | `aq-windows-x64.exe` |
+
+            ### Install
+            Download the binary for your platform, make it executable (`chmod +x aq-*`), and place it in your PATH.
+
+            Or install via npm: `npm install -g aq`
           draft: false
           prerelease: false
           files: |
-            aq-${{ github.ref_name }}.tar.gz
+            release/aq-linux-x64
+            release/aq-macos-x64
+            release/aq-macos-arm64
+            release/aq-windows-x64.exe
