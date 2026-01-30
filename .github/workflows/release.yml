@@ -55,7 +55,7 @@ jobs:
         run: npm run build
 
       - name: Build standalone binaries
-        run: npx @yao-pkg/pkg dist/src/main.js --no-bytecode --targets node20-linux-x64,node20-macos-x64,node20-macos-arm64,node20-win-x64 --output release/aq
+        run: npx @yao-pkg/pkg dist/src/main.js --no-bytecode --public --targets node20-linux-x64,node20-macos-x64,node20-macos-arm64,node20-win-x64 --output release/aq
 
       - name: Package binaries
         run: |
