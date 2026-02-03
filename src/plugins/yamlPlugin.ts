@@ -484,7 +484,7 @@ export const YamlPlugin: AqPlugin = {
       );
     }
 
-    const yamlDocs = parseAllDocuments(input);
+    const yamlDocs = parseAllDocuments(input, { merge: true });
     const docs: unknown[] = yamlDocs.length > 0
       ? yamlDocs.map((d) => d.toJS({ maxAliasCount: -1 }))
       : [null]; // comment-only input yields a single null document

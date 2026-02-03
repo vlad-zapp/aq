@@ -4,6 +4,9 @@ import { ParsedData } from "./infrastructure/ParsedData";
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.stack || error.message;
+  } else if (typeof error === "object" && error !== null && ("message" in error || "stack" in error)) {
+    // Handle errors from VM context (different Error constructor)
+    return (error as any).stack || (error as any).message;
   } else if (typeof error === "string") {
     return error;
   } else {
